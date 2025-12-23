@@ -1,0 +1,342 @@
+# Implementation Plan: Market Data Ingestion
+
+## Overview
+
+This plan implements the Market Data Ingestion feature using TypeScript with AWS Lambda, DynamoDB, Timestream, S3, and ElastiCache. The architecture uses the Adapter pattern (consistent with AI-Assisted Intelligence) to support multiple data providers. Tasks build incrementally from core abstractions to full snapshot assembly.
+
+## Tasks
+
+- [x] 1. Set up project structure and core types
+  - [x] 1.1 Initialize TypeScript project with dependencies
+    - Add dependencies: aws-sdk, @aws-sdk/client-timestream-write, fast-check, jest, ts-jest
+    - Configure tsconfig.json and jest.config.js
+    - _Requirements: N/A (infrastructure)_
+  - [x] 1.2 Create data source abstraction types
+    - Create `src/types/data-source.ts` with DataSource, DataSourceType, DataSourceStatus, RateLimitConfig
+    - Create `src/types/source-adapter.ts` with SourceAdapter interface and all method signatures
+    - _Requirements: 1.1, 1.3_
+  - [x] 1.3 Create price data types
+    - Create `src/types/price.ts` with PricePoint, PriceFeed, PriceAdapter interface
+    - _Requirements: 2.2_
+  - [x] 1.4 Create news data types
+    - Create `src/types/news.ts` with NewsEvent, NewsCategory, NewsAdapter interface, NewsDeduplicationResult
+    - _Requirements: 3.2, 3.3_
+  - [x] 1.5 Create sentiment data types
+    - Create `src/types/sentiment.ts` with SentimentData, SentimentSource, SentimentAdapter interface
+    - _Requirements: 4.2, 4.3_
+  - [x] 1.6 Create on-chain data types
+    - Create `src/types/on-chain.ts` with OnChainMetric, OnChainMetricType, OnChainAdapter interface
+    - _Requirements: 5.2, 5.3_
+  - [x] 1.7 Create snapshot types
+    - Create `src/types/snapshot.ts` with MarketDataSnapshot, DataCompleteness, SnapshotOptions
+    - Create `src/types/news-context.ts` with NewsContext, NewsContextEvent
+    - _Requirements: 6.1, 7.1_
+  - [x] 1.8 Create stream and backfill types
+    - Create `src/types/stream.ts` with DataStream, StreamMetrics
+    - Create `src/types/backfill.ts` with BackfillRequest, BackfillProgress, DataGap
+    - _Requirements: 8.1, 9.1_
+  - [x] 1.9 Create quality types
+    - Create `src/types/quality.ts` with DataQualityScore, QualityComponents, DataAnomaly
+    - _Requirements: 10.1, 10.3_
+
+- [x] 2. Implement data source management
+  - [x] 2.1 Create data source repository
+    - Create `src/repositories/data-source.ts`
+    - Implement CRUD operations for DataSource in DynamoDB
+    - _Requirements: 1.1, 1.2_
+  - [x] 2.2 Implement data source service
+    - Create `src/services/data-source.ts`
+    - Implement registerSource(), updateStatus(), trackUsage()
+    - _Requirements: 1.1, 1.2, 1.5_
+  - [x] 2.3 Write property test for data source registration completeness
+    - **Property 1: Data Source Registration Completeness**
+    - **Validates: Requirements 1.1, 1.2, 1.3**
+  - [x] 2.4 Implement failover logic
+    - Create `src/services/failover.ts`
+    - Implement getActiveSource(), switchToFallback()
+    - _Requirements: 1.4_
+  - [x] 2.5 Write property test for data source failover
+    - **Property 2: Data Source Failover**
+    - **Validates: Requirements 1.4**
+
+- [ ] 3. Checkpoint - Data source management complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 4. Implement price data ingestion
+  - [ ] 4.1 Create base price adapter
+    - Create `src/adapters/price/base-price-adapter.ts`
+    - Implement common price normalization logic
+    - _Requirements: 2.2_
+  - [ ] 4.2 Implement Binance price adapter
+    - Create `src/adapters/price/binance-adapter.ts`
+    - Implement WebSocket subscription and REST historical fetch
+    - _Requirements: 2.2, 2.5_
+  - [ ] 4.3 Implement Coinbase price adapter
+    - Create `src/adapters/price/coinbase-adapter.ts`
+    - Implement WebSocket subscription and REST historical fetch
+    - _Requirements: 2.2, 2.5_
+  - [ ] 4.4 Implement price normalization and validation
+    - Create `src/services/price-normalizer.ts`
+    - Normalize to common format, detect anomalies
+    - _Requirements: 2.2, 2.3_
+  - [ ] 4.5 Write property test for price normalization and validation
+    - **Property 3: Price Data Normalization and Validation**
+    - **Validates: Requirements 2.2, 2.3**
+  - [ ] 4.6 Implement price feed reconnection
+    - Create `src/services/price-reconnect.ts`
+    - Implement exponential backoff and fallback switching
+    - _Requirements: 2.6_
+  - [ ] 4.7 Write property test for price feed reconnection
+    - **Property 4: Price Feed Reconnection**
+    - **Validates: Requirements 2.6**
+  - [ ] 4.8 Create Timestream writer for price data
+    - Create `src/repositories/price-timestream.ts`
+    - Implement batch writes to Timestream
+    - _Requirements: 2.4_
+
+- [ ] 5. Implement news data ingestion
+  - [ ] 5.1 Create base news adapter
+    - Create `src/adapters/news/base-news-adapter.ts`
+    - Implement common news processing logic
+    - _Requirements: 3.1, 3.2_
+  - [ ] 5.2 Implement news adapter for licensed sources
+    - Create `src/adapters/news/reuters-adapter.ts`
+    - Create `src/adapters/news/coindesk-adapter.ts`
+    - _Requirements: 3.1_
+  - [ ] 5.3 Implement news processing service
+    - Create `src/services/news-processor.ts`
+    - Implement field extraction, categorization, relevance scoring
+    - _Requirements: 3.2, 3.3, 3.6_
+  - [ ] 5.4 Write property test for news event processing
+    - **Property 5: News Event Processing**
+    - **Validates: Requirements 3.2, 3.3, 3.6**
+  - [ ] 5.5 Implement news persistence
+    - Create `src/repositories/news.ts`
+    - Implement DynamoDB storage with JSON serialization
+    - _Requirements: 3.4_
+  - [ ] 5.6 Write property test for news persistence round-trip
+    - **Property 6: News Event Persistence Round-Trip**
+    - **Validates: Requirements 3.4**
+  - [ ] 5.7 Implement news deduplication
+    - Create `src/services/news-deduplicator.ts`
+    - Implement content hash comparison and similarity detection
+    - _Requirements: 3.5_
+  - [ ] 5.8 Write property test for news deduplication
+    - **Property 7: News Deduplication**
+    - **Validates: Requirements 3.5**
+
+- [ ] 6. Checkpoint - Price and news ingestion complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 7. Implement sentiment data ingestion
+  - [ ] 7.1 Create base sentiment adapter
+    - Create `src/adapters/sentiment/base-sentiment-adapter.ts`
+    - Implement common sentiment normalization
+    - _Requirements: 4.1, 4.2_
+  - [ ] 7.2 Implement sentiment provider adapters
+    - Create `src/adapters/sentiment/lunarcrush-adapter.ts`
+    - Create `src/adapters/sentiment/santiment-adapter.ts`
+    - _Requirements: 4.1_
+  - [ ] 7.3 Implement sentiment normalization service
+    - Create `src/services/sentiment-normalizer.ts`
+    - Normalize scores to -1 to +1 scale
+    - _Requirements: 4.2, 4.3, 4.4_
+  - [ ] 7.4 Write property test for sentiment normalization
+    - **Property 8: Sentiment Normalization**
+    - **Validates: Requirements 4.2, 4.3, 4.4**
+  - [ ] 7.5 Implement sentiment aggregation
+    - Create `src/services/sentiment-aggregator.ts`
+    - Implement weighted averaging across sources
+    - _Requirements: 4.5_
+  - [ ] 7.6 Write property test for sentiment weighted aggregation
+    - **Property 9: Sentiment Weighted Aggregation**
+    - **Validates: Requirements 4.5**
+  - [ ] 7.7 Create sentiment repository
+    - Create `src/repositories/sentiment.ts`
+    - Implement DynamoDB storage
+    - _Requirements: 4.4_
+
+- [ ] 8. Implement on-chain metrics ingestion
+  - [ ] 8.1 Create base on-chain adapter
+    - Create `src/adapters/on-chain/base-onchain-adapter.ts`
+    - Implement common metric normalization
+    - _Requirements: 5.1, 5.2_
+  - [ ] 8.2 Implement on-chain provider adapters
+    - Create `src/adapters/on-chain/glassnode-adapter.ts`
+    - Create `src/adapters/on-chain/nansen-adapter.ts`
+    - _Requirements: 5.1_
+  - [ ] 8.3 Implement on-chain normalization service
+    - Create `src/services/onchain-normalizer.ts`
+    - Normalize to common format with all metric types
+    - _Requirements: 5.2, 5.3, 5.4_
+  - [ ] 8.4 Write property test for on-chain metric normalization
+    - **Property 10: On-Chain Metric Normalization**
+    - **Validates: Requirements 5.2, 5.3, 5.4**
+  - [ ] 8.5 Implement derived metric calculations
+    - Create `src/services/derived-metrics.ts`
+    - Calculate change24h, change7d, movingAverage7d
+    - _Requirements: 5.5_
+  - [ ] 8.6 Write property test for derived metric calculation
+    - **Property 11: Derived Metric Calculation**
+    - **Validates: Requirements 5.5**
+  - [ ] 8.7 Create on-chain repository
+    - Create `src/repositories/on-chain.ts`
+    - Implement DynamoDB storage
+    - _Requirements: 5.4_
+
+- [ ] 9. Checkpoint - All data type ingestion complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 10. Implement snapshot assembly
+  - [ ] 10.1 Create snapshot service
+    - Create `src/services/snapshot.ts`
+    - Implement assembleSnapshot() combining all data types
+    - _Requirements: 6.1, 6.2_
+  - [ ] 10.2 Implement data completeness tracking
+    - Track which data types are present/missing
+    - Calculate quality score
+    - _Requirements: 6.2, 6.3_
+  - [ ] 10.3 Write property test for snapshot assembly completeness
+    - **Property 12: Snapshot Assembly Completeness**
+    - **Validates: Requirements 6.1, 6.2, 6.3**
+  - [ ] 10.4 Implement snapshot caching
+    - Create `src/services/snapshot-cache.ts`
+    - Implement ElastiCache integration
+    - _Requirements: 6.4_
+  - [ ] 10.5 Write property test for snapshot caching
+    - **Property 13: Snapshot Caching**
+    - **Validates: Requirements 6.4**
+
+- [ ] 11. Implement NewsContext generation
+  - [ ] 11.1 Create context service
+    - Create `src/services/news-context.ts`
+    - Implement generateNewsContext() with relevance ranking
+    - _Requirements: 7.1, 7.2, 7.3_
+  - [ ] 11.2 Write property test for NewsContext generation
+    - **Property 14: NewsContext Generation**
+    - **Validates: Requirements 7.1, 7.2, 7.3**
+  - [ ] 11.3 Implement context tracking
+    - Track which events were used in each analysis
+    - _Requirements: 7.5_
+  - [ ] 11.4 Write property test for NewsContext tracking
+    - **Property 15: NewsContext Tracking**
+    - **Validates: Requirements 7.5**
+
+- [ ] 12. Implement stream management
+  - [ ] 12.1 Create stream service
+    - Create `src/services/stream.ts`
+    - Implement startStream(), stopStream(), pauseStream(), resumeStream()
+    - _Requirements: 8.1_
+  - [ ] 12.2 Implement stream health monitoring
+    - Track connection health, data freshness, metrics
+    - _Requirements: 8.2, 8.5_
+  - [ ] 12.3 Write property test for stream lifecycle management
+    - **Property 16: Stream Lifecycle Management**
+    - **Validates: Requirements 8.1, 8.2, 8.5**
+  - [ ] 12.4 Implement tenant stream limits
+    - Enforce max concurrent streams per tenant
+    - _Requirements: 8.3_
+  - [ ] 12.5 Write property test for stream tenant limits
+    - **Property 17: Stream Tenant Limits**
+    - **Validates: Requirements 8.3**
+  - [ ] 12.6 Create stream repository
+    - Create `src/repositories/stream.ts`
+    - Implement DynamoDB storage for stream state
+    - _Requirements: 8.1_
+
+- [ ] 13. Implement backfill service
+  - [ ] 13.1 Create backfill service
+    - Create `src/services/backfill.ts`
+    - Implement requestBackfill(), processBackfill()
+    - _Requirements: 9.1, 9.2_
+  - [ ] 13.2 Implement progress tracking
+    - Track percentComplete, estimatedCompletionTime
+    - Detect and report data gaps
+    - _Requirements: 9.4, 9.5_
+  - [ ] 13.3 Write property test for backfill processing
+    - **Property 18: Backfill Processing**
+    - **Validates: Requirements 9.1, 9.4, 9.5**
+  - [ ] 13.4 Implement rate limiting for backfill
+    - Respect source rate limits, throttle requests
+    - _Requirements: 9.3_
+  - [ ] 13.5 Write property test for backfill rate limiting
+    - **Property 19: Backfill Rate Limiting**
+    - **Validates: Requirements 9.3**
+  - [ ] 13.6 Create backfill repository
+    - Create `src/repositories/backfill.ts`
+    - Implement DynamoDB storage for backfill requests
+    - _Requirements: 9.1_
+
+- [ ] 14. Checkpoint - Snapshot and stream services complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 15. Implement data quality service
+  - [ ] 15.1 Create quality service
+    - Create `src/services/quality.ts`
+    - Implement calculateQualityScore() with all components
+    - _Requirements: 10.1_
+  - [ ] 15.2 Implement anomaly detection
+    - Detect price spikes, data gaps, stale data
+    - _Requirements: 10.3_
+  - [ ] 15.3 Write property test for quality score calculation
+    - **Property 20: Quality Score Calculation**
+    - **Validates: Requirements 10.1, 10.3, 10.4**
+  - [ ] 15.4 Implement quality threshold alerting
+    - Trigger alerts when quality falls below threshold
+    - _Requirements: 10.2_
+  - [ ] 15.5 Write property test for quality threshold alerting
+    - **Property 21: Quality Threshold Alerting**
+    - **Validates: Requirements 10.2**
+  - [ ] 15.6 Implement quality logging
+    - Log all quality assessments for historical analysis
+    - _Requirements: 10.5_
+
+- [ ] 16. Implement Lambda handlers
+  - [ ] 16.1 Create data source API handlers
+    - Create `src/handlers/data-sources.ts`
+    - Implement CRUD endpoints for data sources
+    - _Requirements: 1.1, 1.2_
+  - [ ] 16.2 Create snapshot API handlers
+    - Create `src/handlers/snapshots.ts`
+    - Implement GET /snapshots/{symbol}
+    - _Requirements: 6.1_
+  - [ ] 16.3 Create news context API handlers
+    - Create `src/handlers/news-context.ts`
+    - Implement GET /news-context/{symbol}
+    - _Requirements: 7.1_
+  - [ ] 16.4 Create stream API handlers
+    - Create `src/handlers/streams.ts`
+    - Implement POST /streams, DELETE /streams/{id}
+    - _Requirements: 8.1_
+  - [ ] 16.5 Create backfill API handlers
+    - Create `src/handlers/backfills.ts`
+    - Implement POST /backfills, GET /backfills/{id}
+    - _Requirements: 9.1_
+  - [ ] 16.6 Create quality API handlers
+    - Create `src/handlers/quality.ts`
+    - Implement GET /quality/{sourceId}
+    - _Requirements: 10.1_
+
+- [ ] 17. Create test generators and integration tests
+  - [ ] 17.1 Create fast-check generators
+    - Create `src/test/generators.ts`
+    - Implement generators for DataSource, PricePoint, NewsEvent, SentimentData, OnChainMetric, MarketDataSnapshot
+    - _Requirements: N/A (testing infrastructure)_
+  - [ ] 17.2 Write integration tests for ingestion flow
+    - Test connect source → receive data → normalize → validate → store
+    - _Requirements: 2.2, 3.2, 4.2, 5.2_
+  - [ ] 17.3 Write integration tests for snapshot assembly
+    - Test ingest all data types → assemble snapshot → verify completeness
+    - _Requirements: 6.1_
+
+- [ ] 18. Final checkpoint - All tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- All tasks are required for comprehensive testing
+- Each task references specific requirements for traceability
+- Property tests use fast-check library with minimum 100 iterations
+- Checkpoints ensure incremental validation before proceeding
+- MarketDataSnapshot and NewsContext are the integration points with AI-Assisted Intelligence
+- Source adapters follow the same pattern as AI-Assisted Intelligence provider adapters

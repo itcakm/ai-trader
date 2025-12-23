@@ -1,0 +1,164 @@
+############################################
+# Node.js Dependencies
+############################################
+node_modules/
+jspm_packages/
+bower_components/
+
+############################################
+# Package Managers
+############################################
+# npm
+npm-debug.log*
+npm-debug.log.*.gz
+
+# yarn
+yarn-debug.log*
+yarn-error.log*
+.yarn-integrity
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# pnpm
+.pnpm-debug.log*
+.pnpm-store/
+
+############################################
+# Build Output
+############################################
+dist/
+build/
+lib/
+out/
+coverage/
+.tmp/
+.temp/
+
+############################################
+# Framework-Specific
+############################################
+# Next.js
+.next/
+out/
+
+# Nuxt
+.nuxt/
+dist/
+
+# Gatsby
+.cache/
+public/
+
+# Svelte / SvelteKit
+.svelte-kit/
+
+# NestJS
+dist/
+
+############################################
+# Logs
+############################################
+logs/
+*.log
+*.log.*
+
+############################################
+# Environment Variables
+############################################
+.env
+.env.*
+!.env.example
+!.env.sample
+
+############################################
+# Testing
+############################################
+coverage/
+.nyc_output/
+jest-cache/
+playwright-report/
+test-results/
+
+############################################
+# Linting & Formatting
+############################################
+.eslintcache
+.stylelintcache
+
+############################################
+# TypeScript
+############################################
+*.tsbuildinfo
+
+############################################
+# REPL & Debug
+############################################
+.node_repl_history
+.vscode-test/
+.inspector
+
+############################################
+# Editor Directories and Files
+############################################
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# JetBrains
+.idea/
+*.iml
+
+# Sublime
+*.sublime-workspace
+*.sublime-project
+
+############################################
+# OS Files
+############################################
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+############################################
+# Docker
+############################################
+docker-data/
+docker-volume/
+
+############################################
+# Cloud / Serverless
+############################################
+.serverless/
+.vercel/
+.netlify/
+.firebase/
+.firebase-debug.log
+
+############################################
+# Security
+############################################
+*.pem
+*.key
+*.crt
+
+############################################
+# Cache & Misc
+############################################
+.cache/
+.parcel-cache/
+.esbuild/
+webpack.cache/
