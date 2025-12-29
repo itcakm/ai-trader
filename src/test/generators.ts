@@ -1227,3 +1227,1213 @@ export const dataSourceForBackfillArb = (): fc.Arbitrary<DataSource> =>
     createdAt: isoDateStringArb(),
     updatedAt: isoDateStringArb()
   });
+
+
+/**
+ * AI Provider Generators
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
+ */
+
+import {
+  AIProvider,
+  ProviderType,
+  ProviderStatus,
+  RateLimitConfig as AIRateLimitConfig
+} from '../types/provider';
+import { CreateProviderInput } from '../repositories/provider';
+
+/**
+ * Generator for ProviderType
+ */
+export const providerTypeArb = (): fc.Arbitrary<ProviderType> =>
+  fc.constantFrom('GEMINI', 'OPENAI', 'DEEPSEEK', 'ANTHROPIC', 'CUSTOM');
+
+/**
+ * Generator for ProviderStatus
+ */
+export const providerStatusArb = (): fc.Arbitrary<ProviderStatus> =>
+  fc.constantFrom('ACTIVE', 'INACTIVE', 'RATE_LIMITED', 'ERROR');
+
+/**
+ * Generator for AI provider auth method
+ */
+export const aiAuthMethodArb = (): fc.Arbitrary<'API_KEY' | 'OAUTH' | 'IAM'> =>
+  fc.constantFrom('API_KEY', 'OAUTH', 'IAM');
+
+/**
+ * Generator for AI RateLimitConfig
+ */
+export const aiRateLimitConfigArb = (): fc.Arbitrary<AIRateLimitConfig> =>
+  fc.record({
+    requestsPerMinute: fc.integer({ min: 1, max: 1000 }),
+    tokensPerMinute: fc.integer({ min: 100, max: 1000000 }),
+    requestsPerDay: fc.integer({ min: 100, max: 100000 })
+  }).filter(config =>
+    config.requestsPerMinute * 60 * 24 <= config.requestsPerDay
+  );
+
+/**
+ * Generator for supported AI models array
+ */
+export const supportedModelsArb = (): fc.Arbitrary<string[]> =>
+  fc.array(
+    fc.constantFrom(
+      'gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo',
+      'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro',
+      'deepseek-chat', 'deepseek-coder',
+      'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'
+    ),
+    { minLength: 1, maxLength: 5 }
+  ).map(models => [...new Set(models)]);
+
+/**
+ * Generator for AI provider API endpoint URLs
+ */
+export const aiApiEndpointArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'https://api.openai.com/v1',
+    'https://generativelanguage.googleapis.com/v1',
+    'https://api.deepseek.com/v1',
+    'https://api.anthropic.com/v1'
+  );
+
+/**
+ * Generator for AI provider names
+ */
+export const aiProviderNameArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'OpenAI GPT',
+    'Google Gemini',
+    'DeepSeek',
+    'Anthropic Claude',
+    'Custom Provider'
+  );
+
+/**
+ * Generator for CreateProviderInput
+ */
+export const createProviderInputArb = (): fc.Arbitrary<CreateProviderInput> =>
+  fc.record({
+    providerId: fc.uuid(),
+    type: providerTypeArb(),
+    name: aiProviderNameArb(),
+    apiEndpoint: aiApiEndpointArb(),
+    authMethod: aiAuthMethodArb(),
+    supportedModels: supportedModelsArb(),
+    rateLimits: aiRateLimitConfigArb()
+  });
+
+/**
+ * Generator for AIProvider
+ */
+export const aiProviderArb = (): fc.Arbitrary<AIProvider> =>
+  fc.record({
+    providerId: fc.uuid(),
+    type: providerTypeArb(),
+    name: aiProviderNameArb(),
+    apiEndpoint: aiApiEndpointArb(),
+    authMethod: aiAuthMethodArb(),
+    supportedModels: supportedModelsArb(),
+    status: providerStatusArb(),
+    rateLimits: aiRateLimitConfigArb(),
+    createdAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for AIProvider with specific status
+ */
+export const aiProviderWithStatusArb = (status: ProviderStatus): fc.Arbitrary<AIProvider> =>
+  fc.record({
+    providerId: fc.uuid(),
+    type: providerTypeArb(),
+    name: aiProviderNameArb(),
+    apiEndpoint: aiApiEndpointArb(),
+    authMethod: aiAuthMethodArb(),
+    supportedModels: supportedModelsArb(),
+    status: fc.constant(status),
+    rateLimits: aiRateLimitConfigArb(),
+    createdAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for active AIProvider
+ */
+export const activeAiProviderArb = (): fc.Arbitrary<AIProvider> =>
+  aiProviderWithStatusArb('ACTIVE');
+
+/**
+ * Generator for inactive AIProvider
+ */
+export const inactiveAiProviderArb = (): fc.Arbitrary<AIProvider> =>
+  aiProviderWithStatusArb('INACTIVE');
+
+
+/**
+ * Model Configuration Generators
+ * Requirements: 2.1, 2.4
+ */
+
+import {
+  ModelConfiguration,
+  ModelConfigurationInput,
+  EncryptedCredentials,
+  CostLimits
+} from '../types/model-config';
+
+/**
+ * Generator for EncryptedCredentials
+ */
+export const encryptedCredentialsArb = (): fc.Arbitrary<EncryptedCredentials> =>
+  fc.record({
+    encryptedApiKey: fc.hexaString({ minLength: 64, maxLength: 128 }),
+    keyId: fc.uuid()
+  });
+
+/**
+ * Generator for CostLimits
+ */
+export const costLimitsArb = (): fc.Arbitrary<CostLimits> =>
+  fc.record({
+    maxDailyCostUsd: fc.double({ min: 1, max: 10000, noNaN: true }),
+    maxMonthlyCostUsd: fc.double({ min: 10, max: 100000, noNaN: true }),
+    currentDailyCostUsd: fc.double({ min: 0, max: 10000, noNaN: true }),
+    currentMonthlyCostUsd: fc.double({ min: 0, max: 100000, noNaN: true }),
+    lastResetDate: isoDateStringArb()
+  }).filter(limits =>
+    limits.currentDailyCostUsd <= limits.maxDailyCostUsd &&
+    limits.currentMonthlyCostUsd <= limits.maxMonthlyCostUsd &&
+    limits.maxDailyCostUsd * 31 <= limits.maxMonthlyCostUsd
+  );
+
+/**
+ * Generator for CostLimits with current cost below limits
+ */
+export const costLimitsBelowLimitArb = (): fc.Arbitrary<CostLimits> =>
+  fc.record({
+    maxDailyCostUsd: fc.double({ min: 100, max: 10000, noNaN: true }),
+    maxMonthlyCostUsd: fc.double({ min: 1000, max: 100000, noNaN: true }),
+    lastResetDate: isoDateStringArb()
+  }).chain(limits =>
+    fc.record({
+      maxDailyCostUsd: fc.constant(limits.maxDailyCostUsd),
+      maxMonthlyCostUsd: fc.constant(limits.maxMonthlyCostUsd),
+      currentDailyCostUsd: fc.double({ min: 0, max: limits.maxDailyCostUsd * 0.5, noNaN: true }),
+      currentMonthlyCostUsd: fc.double({ min: 0, max: limits.maxMonthlyCostUsd * 0.5, noNaN: true }),
+      lastResetDate: fc.constant(limits.lastResetDate)
+    })
+  );
+
+/**
+ * Generator for CostLimits with current cost exceeding daily limit
+ */
+export const costLimitsExceededDailyArb = (): fc.Arbitrary<CostLimits> =>
+  fc.record({
+    maxDailyCostUsd: fc.double({ min: 10, max: 1000, noNaN: true }),
+    maxMonthlyCostUsd: fc.double({ min: 1000, max: 100000, noNaN: true }),
+    lastResetDate: isoDateStringArb()
+  }).chain(limits =>
+    fc.record({
+      maxDailyCostUsd: fc.constant(limits.maxDailyCostUsd),
+      maxMonthlyCostUsd: fc.constant(limits.maxMonthlyCostUsd),
+      currentDailyCostUsd: fc.double({ min: limits.maxDailyCostUsd + 0.01, max: limits.maxDailyCostUsd * 2, noNaN: true }),
+      currentMonthlyCostUsd: fc.double({ min: 0, max: limits.maxMonthlyCostUsd * 0.5, noNaN: true }),
+      lastResetDate: fc.constant(limits.lastResetDate)
+    })
+  );
+
+/**
+ * Generator for ModelConfigurationInput
+ */
+export const modelConfigurationInputArb = (): fc.Arbitrary<ModelConfigurationInput> =>
+  fc.record({
+    providerId: fc.uuid(),
+    modelId: fc.constantFrom(
+      'gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo',
+      'gemini-1.5-pro', 'gemini-1.5-flash',
+      'deepseek-chat', 'deepseek-coder'
+    ),
+    modelName: fc.constantFrom(
+      'GPT-4', 'GPT-4 Turbo', 'GPT-3.5 Turbo',
+      'Gemini 1.5 Pro', 'Gemini 1.5 Flash',
+      'DeepSeek Chat', 'DeepSeek Coder'
+    ),
+    enabled: fc.option(fc.boolean(), { nil: undefined }),
+    credentials: encryptedCredentialsArb(),
+    costLimits: costLimitsArb(),
+    rateLimits: aiRateLimitConfigArb(),
+    priority: fc.option(fc.integer({ min: 1, max: 10 }), { nil: undefined })
+  });
+
+/**
+ * Generator for ModelConfiguration
+ */
+export const modelConfigurationArb = (): fc.Arbitrary<ModelConfiguration> =>
+  fc.record({
+    configId: fc.uuid(),
+    tenantId: fc.uuid(),
+    providerId: fc.uuid(),
+    modelId: fc.constantFrom(
+      'gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo',
+      'gemini-1.5-pro', 'gemini-1.5-flash',
+      'deepseek-chat', 'deepseek-coder'
+    ),
+    modelName: fc.constantFrom(
+      'GPT-4', 'GPT-4 Turbo', 'GPT-3.5 Turbo',
+      'Gemini 1.5 Pro', 'Gemini 1.5 Flash',
+      'DeepSeek Chat', 'DeepSeek Coder'
+    ),
+    enabled: fc.boolean(),
+    credentials: encryptedCredentialsArb(),
+    costLimits: costLimitsArb(),
+    rateLimits: aiRateLimitConfigArb(),
+    priority: fc.integer({ min: 1, max: 10 }),
+    createdAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for enabled ModelConfiguration
+ */
+export const enabledModelConfigurationArb = (): fc.Arbitrary<ModelConfiguration> =>
+  modelConfigurationArb().map(config => ({ ...config, enabled: true }));
+
+/**
+ * Generator for disabled ModelConfiguration
+ */
+export const disabledModelConfigurationArb = (): fc.Arbitrary<ModelConfiguration> =>
+  modelConfigurationArb().map(config => ({ ...config, enabled: false }));
+
+/**
+ * Generator for ModelConfiguration with specific tenant
+ */
+export const modelConfigurationForTenantArb = (tenantId: string): fc.Arbitrary<ModelConfiguration> =>
+  modelConfigurationArb().map(config => ({ ...config, tenantId }));
+
+/**
+ * Generator for ModelConfiguration with specific provider
+ */
+export const modelConfigurationForProviderArb = (providerId: string): fc.Arbitrary<ModelConfiguration> =>
+  modelConfigurationArb().map(config => ({ ...config, providerId }));
+
+/**
+ * Generator for ModelConfiguration with cost limits below threshold
+ */
+export const modelConfigurationBelowCostLimitArb = (): fc.Arbitrary<ModelConfiguration> =>
+  fc.record({
+    configId: fc.uuid(),
+    tenantId: fc.uuid(),
+    providerId: fc.uuid(),
+    modelId: fc.constantFrom('gpt-4', 'gemini-1.5-pro', 'deepseek-chat'),
+    modelName: fc.constantFrom('GPT-4', 'Gemini 1.5 Pro', 'DeepSeek Chat'),
+    enabled: fc.boolean(),
+    credentials: encryptedCredentialsArb(),
+    costLimits: costLimitsBelowLimitArb(),
+    rateLimits: aiRateLimitConfigArb(),
+    priority: fc.integer({ min: 1, max: 10 }),
+    createdAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for ModelConfiguration with exceeded daily cost limit
+ */
+export const modelConfigurationExceededCostLimitArb = (): fc.Arbitrary<ModelConfiguration> =>
+  fc.record({
+    configId: fc.uuid(),
+    tenantId: fc.uuid(),
+    providerId: fc.uuid(),
+    modelId: fc.constantFrom('gpt-4', 'gemini-1.5-pro', 'deepseek-chat'),
+    modelName: fc.constantFrom('GPT-4', 'Gemini 1.5 Pro', 'DeepSeek Chat'),
+    enabled: fc.boolean(),
+    credentials: encryptedCredentialsArb(),
+    costLimits: costLimitsExceededDailyArb(),
+    rateLimits: aiRateLimitConfigArb(),
+    priority: fc.integer({ min: 1, max: 10 }),
+    createdAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+
+/**
+ * Prompt Template Generators
+ * Requirements: 8.1, 8.2, 8.3, 8.4
+ */
+
+import {
+  PromptTemplate,
+  PromptTemplateInput,
+  PromptParameter,
+  PromptTemplateType
+} from '../types/prompt-template';
+
+/**
+ * Generator for PromptTemplateType
+ */
+export const promptTemplateTypeArb = (): fc.Arbitrary<PromptTemplateType> =>
+  fc.constantFrom('REGIME_CLASSIFICATION', 'EXPLANATION', 'PARAMETER_SUGGESTION');
+
+/**
+ * Generator for PromptParameter
+ */
+export const promptParameterArb = (): fc.Arbitrary<PromptParameter> =>
+  fc.record({
+    name: fc.string({ minLength: 1, maxLength: 30 }).filter(s => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(s)),
+    required: fc.boolean(),
+    defaultValue: fc.option(fc.string({ minLength: 1, maxLength: 100 }), { nil: undefined }),
+    description: fc.string({ minLength: 1, maxLength: 200 })
+  });
+
+/**
+ * Generator for prompt template content with parameters
+ */
+export const promptContentArb = (paramNames?: string[]): fc.Arbitrary<string> => {
+  if (paramNames && paramNames.length > 0) {
+    // Generate content that includes the specified parameters
+    return fc.tuple(
+      fc.string({ minLength: 10, maxLength: 200 }),
+      fc.string({ minLength: 10, maxLength: 200 })
+    ).map(([prefix, suffix]) => {
+      const paramPlaceholders = paramNames.map(name => `{{${name}}}`).join(' ');
+      return `${prefix} ${paramPlaceholders} ${suffix}`;
+    });
+  }
+  return fc.string({ minLength: 20, maxLength: 500 });
+};
+
+/**
+ * Generator for PromptTemplateInput
+ */
+export const promptTemplateInputArb = (): fc.Arbitrary<PromptTemplateInput> =>
+  fc.array(promptParameterArb(), { minLength: 0, maxLength: 5 })
+    .chain(parameters => {
+      const paramNames = parameters.map(p => p.name);
+      return fc.record({
+        templateId: fc.option(fc.uuid(), { nil: undefined }),
+        name: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+        type: promptTemplateTypeArb(),
+        content: promptContentArb(paramNames),
+        parameters: fc.constant(parameters),
+        createdBy: fc.uuid()
+      });
+    });
+
+/**
+ * Generator for PromptTemplate
+ */
+export const promptTemplateArb = (): fc.Arbitrary<PromptTemplate> =>
+  fc.array(promptParameterArb(), { minLength: 0, maxLength: 5 })
+    .chain(parameters => {
+      const paramNames = parameters.map(p => p.name);
+      return fc.record({
+        templateId: fc.uuid(),
+        name: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+        version: fc.integer({ min: 1, max: 1000 }),
+        type: promptTemplateTypeArb(),
+        content: promptContentArb(paramNames),
+        parameters: fc.constant(parameters),
+        createdAt: isoDateStringArb(),
+        createdBy: fc.uuid()
+      });
+    });
+
+/**
+ * Generator for PromptTemplate with specific version
+ */
+export const promptTemplateWithVersionArb = (version: number): fc.Arbitrary<PromptTemplate> =>
+  promptTemplateArb().map(template => ({ ...template, version }));
+
+/**
+ * Generator for PromptTemplate with parameters that have placeholders in content
+ */
+export const promptTemplateWithPlaceholdersArb = (): fc.Arbitrary<PromptTemplate> =>
+  fc.array(
+    fc.string({ minLength: 1, maxLength: 20 }).filter(s => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(s)),
+    { minLength: 1, maxLength: 5 }
+  ).chain(paramNames => {
+    const uniqueNames = [...new Set(paramNames)];
+    const parameters: PromptParameter[] = uniqueNames.map(name => ({
+      name,
+      required: true,
+      description: `Parameter ${name}`
+    }));
+    
+    return fc.tuple(
+      fc.uuid(),
+      fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+      fc.integer({ min: 1, max: 1000 }),
+      promptTemplateTypeArb(),
+      fc.string({ minLength: 10, maxLength: 100 }),
+      fc.string({ minLength: 10, maxLength: 100 }),
+      isoDateStringArb(),
+      fc.uuid()
+    ).map(([templateId, name, version, type, prefix, suffix, createdAt, createdBy]) => {
+      const placeholders = uniqueNames.map(n => `{{${n}}}`).join(' ');
+      const content = `${prefix} ${placeholders} ${suffix}`;
+      return {
+        templateId,
+        name,
+        version,
+        type,
+        content,
+        parameters,
+        createdAt,
+        createdBy
+      };
+    });
+  });
+
+/**
+ * Generator for valid parameter values matching a template's parameters
+ */
+export const validParameterValuesArb = (
+  parameters: PromptParameter[]
+): fc.Arbitrary<Record<string, string>> => {
+  if (parameters.length === 0) {
+    return fc.constant({});
+  }
+  
+  const entries = parameters.map(param =>
+    fc.tuple(
+      fc.constant(param.name),
+      fc.string({ minLength: 1, maxLength: 50 })
+    )
+  );
+  
+  return fc.tuple(...entries).map(pairs =>
+    Object.fromEntries(pairs)
+  );
+};
+
+/**
+ * Generator for parameter values with some required parameters missing
+ */
+export const incompleteParameterValuesArb = (
+  parameters: PromptParameter[]
+): fc.Arbitrary<{ values: Record<string, string>; missing: string[] }> => {
+  const requiredParams = parameters.filter(p => p.required && !p.defaultValue);
+  
+  if (requiredParams.length === 0) {
+    return fc.constant({ values: {}, missing: [] });
+  }
+  
+  // Pick at least one required parameter to omit
+  return fc.integer({ min: 1, max: requiredParams.length }).chain(numToOmit => {
+    return fc.shuffledSubarray(requiredParams, { minLength: numToOmit, maxLength: numToOmit })
+      .chain(omittedParams => {
+        const omittedNames = new Set(omittedParams.map(p => p.name));
+        const includedParams = parameters.filter(p => !omittedNames.has(p.name));
+        
+        return validParameterValuesArb(includedParams).map(values => ({
+          values,
+          missing: Array.from(omittedNames)
+        }));
+      });
+  });
+};
+
+
+/**
+ * Fund Allocation Generators
+ * Requirements: 5.1, 5.2, 5.3, 5.4
+ */
+
+import { FundAllocation, ModelAllocation, AllocationValidation } from '../types/allocation';
+
+/**
+ * Generator for a single ModelAllocation
+ */
+export const modelAllocationArb = (): fc.Arbitrary<ModelAllocation> =>
+  fc.record({
+    modelConfigId: fc.uuid(),
+    percentage: fc.integer({ min: 10, max: 100 }),
+    priority: fc.integer({ min: 1, max: 10 })
+  });
+
+/**
+ * Generator for valid ModelAllocation array (sum = 100%, count 1-5, min 10% each)
+ */
+export const validModelAllocationsArb = (): fc.Arbitrary<ModelAllocation[]> =>
+  fc.integer({ min: 1, max: 5 }).chain(count => {
+    // Generate percentages that sum to 100 with minimum 10% each
+    return generateValidPercentages(count).chain(percentages =>
+      fc.array(
+        fc.record({
+          modelConfigId: fc.uuid(),
+          priority: fc.integer({ min: 1, max: 10 })
+        }),
+        { minLength: count, maxLength: count }
+      ).map(configs =>
+        configs.map((config, index) => ({
+          ...config,
+          percentage: percentages[index]
+        }))
+      )
+    );
+  });
+
+/**
+ * Helper to generate valid percentages that sum to 100 with minimum 10% each
+ */
+function generateValidPercentages(count: number): fc.Arbitrary<number[]> {
+  if (count === 1) {
+    return fc.constant([100]);
+  }
+  
+  // For count models, we need to distribute 100% with min 10% each
+  // Available to distribute: 100 - (count * 10) = 100 - count*10
+  const minTotal = count * 10;
+  const available = 100 - minTotal;
+  
+  if (available < 0) {
+    // Can't satisfy constraints, return equal distribution
+    return fc.constant(Array(count).fill(Math.floor(100 / count)));
+  }
+  
+  // Generate random distribution of the available amount
+  return fc.array(
+    fc.integer({ min: 0, max: available }),
+    { minLength: count - 1, maxLength: count - 1 }
+  ).map(extras => {
+    // Sort to use as cumulative distribution points
+    const sorted = [...extras].sort((a, b) => a - b);
+    const diffs = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      diffs.push(sorted[i] - sorted[i - 1]);
+    }
+    diffs.push(available - sorted[sorted.length - 1]);
+    
+    // Add minimum 10% to each
+    return diffs.map(d => d + 10);
+  });
+}
+
+/**
+ * Generator for invalid allocations - sum not equal to 100%
+ */
+export const invalidSumAllocationsArb = (): fc.Arbitrary<ModelAllocation[]> =>
+  fc.integer({ min: 1, max: 5 }).chain(count =>
+    fc.array(
+      fc.record({
+        modelConfigId: fc.uuid(),
+        percentage: fc.integer({ min: 10, max: 50 }), // Will likely not sum to 100
+        priority: fc.integer({ min: 1, max: 10 })
+      }),
+      { minLength: count, maxLength: count }
+    ).filter(allocations => {
+      const sum = allocations.reduce((s, a) => s + a.percentage, 0);
+      return sum !== 100;
+    })
+  );
+
+/**
+ * Generator for invalid allocations - too many models (> 5)
+ */
+export const tooManyModelsAllocationsArb = (): fc.Arbitrary<ModelAllocation[]> =>
+  fc.integer({ min: 6, max: 10 }).chain(count => {
+    const percentage = Math.floor(100 / count);
+    const remainder = 100 - (percentage * count);
+    
+    return fc.array(
+      fc.record({
+        modelConfigId: fc.uuid(),
+        priority: fc.integer({ min: 1, max: 10 })
+      }),
+      { minLength: count, maxLength: count }
+    ).map(configs =>
+      configs.map((config, index) => ({
+        ...config,
+        percentage: index === 0 ? percentage + remainder : percentage
+      }))
+    );
+  });
+
+/**
+ * Generator for invalid allocations - percentage below minimum (< 10%)
+ */
+export const belowMinPercentageAllocationsArb = (): fc.Arbitrary<ModelAllocation[]> =>
+  fc.tuple(
+    fc.uuid(),
+    fc.uuid(),
+    fc.integer({ min: 1, max: 9 }) // Below minimum 10%
+  ).map(([id1, id2, lowPercentage]) => [
+    { modelConfigId: id1, percentage: lowPercentage, priority: 1 },
+    { modelConfigId: id2, percentage: 100 - lowPercentage, priority: 2 }
+  ]);
+
+/**
+ * Generator for empty allocations (count < 1)
+ */
+export const emptyAllocationsArb = (): fc.Arbitrary<ModelAllocation[]> =>
+  fc.constant([]);
+
+/**
+ * Generator for FundAllocation
+ */
+export const fundAllocationArb = (): fc.Arbitrary<FundAllocation> =>
+  validModelAllocationsArb().chain(allocations =>
+    fc.record({
+      allocationId: fc.uuid(),
+      tenantId: fc.uuid(),
+      strategyId: fc.uuid(),
+      version: fc.integer({ min: 1, max: 100 }),
+      allocations: fc.constant(allocations),
+      ensembleMode: fc.boolean(),
+      createdAt: isoDateStringArb(),
+      createdBy: fc.uuid()
+    })
+  );
+
+/**
+ * Generator for a sequence of FundAllocation versions
+ */
+export const fundAllocationHistoryArb = (): fc.Arbitrary<FundAllocation[]> =>
+  fc.tuple(
+    fc.uuid(), // tenantId
+    fc.uuid(), // strategyId
+    fc.integer({ min: 1, max: 5 }) // number of versions
+  ).chain(([tenantId, strategyId, versionCount]) =>
+    fc.array(
+      validModelAllocationsArb(),
+      { minLength: versionCount, maxLength: versionCount }
+    ).chain(allocationsList =>
+      fc.array(
+        fc.tuple(fc.uuid(), isoDateStringArb(), fc.uuid()),
+        { minLength: versionCount, maxLength: versionCount }
+      ).map(metadata =>
+        allocationsList.map((allocations, index) => ({
+          allocationId: metadata[index][0],
+          tenantId,
+          strategyId,
+          version: index + 1,
+          allocations,
+          ensembleMode: allocations.length > 1,
+          createdAt: metadata[index][1],
+          createdBy: metadata[index][2]
+        }))
+      )
+    )
+  );
+
+
+/**
+ * Performance Tracking Generators
+ * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
+ */
+
+import {
+  ModelPerformance,
+  PerformancePrediction,
+  PerformanceMetrics,
+  PerformancePeriod,
+  RecordPredictionInput
+} from '../types/performance';
+import { MarketRegime } from '../types/analysis';
+
+/**
+ * Generator for MarketRegime
+ */
+export const marketRegimeArb = (): fc.Arbitrary<MarketRegime> =>
+  fc.constantFrom(
+    'TRENDING_UP',
+    'TRENDING_DOWN',
+    'RANGING',
+    'HIGH_VOLATILITY',
+    'LOW_VOLATILITY',
+    'UNCERTAIN'
+  );
+
+/**
+ * Generator for PerformancePeriod
+ */
+export const performancePeriodArb = (): fc.Arbitrary<PerformancePeriod> =>
+  fc.constantFrom('DAILY', 'WEEKLY', 'MONTHLY');
+
+/**
+ * Generator for PerformanceMetrics
+ */
+export const performanceMetricsArb = (): fc.Arbitrary<PerformanceMetrics> =>
+  fc.record({
+    totalAnalyses: fc.integer({ min: 0, max: 10000 }),
+    regimeAccuracy: fc.double({ min: 0, max: 1, noNaN: true }),
+    averageConfidence: fc.double({ min: 0, max: 1, noNaN: true }),
+    averageLatencyMs: fc.double({ min: 0, max: 10000, noNaN: true }),
+    totalCostUsd: fc.double({ min: 0, max: 10000, noNaN: true }),
+    costPerAnalysis: fc.double({ min: 0, max: 100, noNaN: true }),
+    errorRate: fc.double({ min: 0, max: 1, noNaN: true }),
+    validationFailureRate: fc.double({ min: 0, max: 1, noNaN: true })
+  });
+
+/**
+ * Generator for ModelPerformance
+ */
+export const modelPerformanceArb = (): fc.Arbitrary<ModelPerformance> =>
+  fc.record({
+    performanceId: fc.uuid(),
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    period: performancePeriodArb(),
+    periodStart: isoDateStringArb(),
+    metrics: performanceMetricsArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for PerformancePrediction (unvalidated)
+ */
+export const unvalidatedPredictionArb = (): fc.Arbitrary<PerformancePrediction> =>
+  fc.record({
+    predictionId: fc.uuid(),
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    analysisId: fc.uuid(),
+    predictedRegime: marketRegimeArb(),
+    confidence: fc.double({ min: 0, max: 1, noNaN: true }),
+    timestamp: isoDateStringArb(),
+    validated: fc.constant(false),
+    actualRegime: fc.constant(undefined),
+    correct: fc.constant(undefined),
+    processingTimeMs: fc.option(fc.double({ min: 0, max: 10000, noNaN: true }), { nil: undefined }),
+    costUsd: fc.option(fc.double({ min: 0, max: 10, noNaN: true }), { nil: undefined })
+  });
+
+/**
+ * Generator for PerformancePrediction (validated)
+ */
+export const validatedPredictionArb = (): fc.Arbitrary<PerformancePrediction> =>
+  fc.record({
+    predictionId: fc.uuid(),
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    analysisId: fc.uuid(),
+    predictedRegime: marketRegimeArb(),
+    confidence: fc.double({ min: 0, max: 1, noNaN: true }),
+    timestamp: isoDateStringArb(),
+    validated: fc.constant(true),
+    actualRegime: marketRegimeArb(),
+    processingTimeMs: fc.option(fc.double({ min: 0, max: 10000, noNaN: true }), { nil: undefined }),
+    costUsd: fc.option(fc.double({ min: 0, max: 10, noNaN: true }), { nil: undefined })
+  }).map(prediction => ({
+    ...prediction,
+    correct: prediction.predictedRegime === prediction.actualRegime
+  }));
+
+/**
+ * Generator for PerformancePrediction (either validated or unvalidated)
+ */
+export const performancePredictionArb = (): fc.Arbitrary<PerformancePrediction> =>
+  fc.oneof(unvalidatedPredictionArb(), validatedPredictionArb());
+
+/**
+ * Generator for RecordPredictionInput
+ */
+export const recordPredictionInputArb = (): fc.Arbitrary<RecordPredictionInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    analysisId: fc.uuid(),
+    predictedRegime: marketRegimeArb(),
+    confidence: fc.double({ min: 0, max: 1, noNaN: true }),
+    processingTimeMs: fc.option(fc.double({ min: 0, max: 10000, noNaN: true }), { nil: undefined }),
+    costUsd: fc.option(fc.double({ min: 0, max: 10, noNaN: true }), { nil: undefined })
+  });
+
+/**
+ * Generator for a list of predictions for the same model
+ */
+export const predictionListForModelArb = (): fc.Arbitrary<{
+  tenantId: string;
+  modelConfigId: string;
+  predictions: PerformancePrediction[];
+}> =>
+  fc.tuple(
+    fc.uuid(),
+    fc.uuid(),
+    fc.integer({ min: 1, max: 20 })
+  ).chain(([tenantId, modelConfigId, count]) =>
+    fc.array(
+      fc.record({
+        predictionId: fc.uuid(),
+        analysisId: fc.uuid(),
+        predictedRegime: marketRegimeArb(),
+        confidence: fc.double({ min: 0, max: 1, noNaN: true }),
+        timestamp: isoDateStringArb(),
+        validated: fc.boolean(),
+        actualRegime: fc.option(marketRegimeArb(), { nil: undefined }),
+        processingTimeMs: fc.option(fc.double({ min: 0, max: 10000, noNaN: true }), { nil: undefined }),
+        costUsd: fc.option(fc.double({ min: 0, max: 10, noNaN: true }), { nil: undefined })
+      }),
+      { minLength: count, maxLength: count }
+    ).map(predictions => ({
+      tenantId,
+      modelConfigId,
+      predictions: predictions.map(p => ({
+        ...p,
+        tenantId,
+        modelConfigId,
+        correct: p.validated && p.actualRegime !== undefined
+          ? p.predictedRegime === p.actualRegime
+          : undefined
+      }))
+    }))
+  );
+
+/**
+ * Generator for performance comparison data (multiple models)
+ */
+export const performanceComparisonArb = (): fc.Arbitrary<{
+  tenantId: string;
+  period: PerformancePeriod;
+  performances: ModelPerformance[];
+}> =>
+  fc.tuple(
+    fc.uuid(),
+    performancePeriodArb(),
+    fc.integer({ min: 2, max: 5 })
+  ).chain(([tenantId, period, count]) =>
+    fc.array(
+      fc.tuple(fc.uuid(), performanceMetricsArb(), isoDateStringArb(), isoDateStringArb()),
+      { minLength: count, maxLength: count }
+    ).map(data => ({
+      tenantId,
+      period,
+      performances: data.map(([modelConfigId, metrics, periodStart, updatedAt]) => ({
+        performanceId: `perf-${modelConfigId}`,
+        tenantId,
+        modelConfigId,
+        period,
+        periodStart,
+        metrics,
+        updatedAt
+      }))
+    }))
+  );
+
+
+/**
+ * Regime Classification Generators
+ * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
+ */
+
+import {
+  RegimeClassificationRequest,
+  RegimeClassificationResponse,
+  ExplanationRequest,
+  ExplanationResponse,
+  ExplanationFactor,
+  StrategyAction,
+  ParameterSuggestionRequest,
+  ParameterSuggestionResponse,
+  ParameterSuggestion
+} from '../types/analysis';
+import {
+  MarketDataSnapshot as AnalysisMarketDataSnapshot,
+  PricePoint as AnalysisPricePoint,
+  VolumePoint as AnalysisVolumePoint
+} from '../types/market-data';
+
+/**
+ * Generator for AnalysisPricePoint (from market-data.ts)
+ */
+export const analysisPricePointArb = (): fc.Arbitrary<AnalysisPricePoint> =>
+  fc.record({
+    timestamp: isoDateStringArb(),
+    open: fc.double({ min: 0.01, max: 100000, noNaN: true }),
+    high: fc.double({ min: 0.01, max: 100000, noNaN: true }),
+    low: fc.double({ min: 0.01, max: 100000, noNaN: true }),
+    close: fc.double({ min: 0.01, max: 100000, noNaN: true })
+  }).map(p => ({
+    ...p,
+    high: Math.max(p.open, p.high, p.low, p.close),
+    low: Math.min(p.open, p.high, p.low, p.close)
+  }));
+
+/**
+ * Generator for AnalysisVolumePoint (from market-data.ts)
+ */
+export const analysisVolumePointArb = (): fc.Arbitrary<AnalysisVolumePoint> =>
+  fc.record({
+    timestamp: isoDateStringArb(),
+    volume: fc.double({ min: 0, max: 1000000000, noNaN: true })
+  });
+
+/**
+ * Generator for AnalysisMarketDataSnapshot (from market-data.ts)
+ */
+export const analysisMarketDataSnapshotArb = (): fc.Arbitrary<AnalysisMarketDataSnapshot> =>
+  fc.record({
+    symbol: cryptoSymbolArb(),
+    prices: fc.array(analysisPricePointArb(), { minLength: 1, maxLength: 100 }),
+    volume: fc.array(analysisVolumePointArb(), { minLength: 1, maxLength: 100 }),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for RegimeClassificationRequest
+ */
+export const regimeClassificationRequestArb = (): fc.Arbitrary<RegimeClassificationRequest> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    marketData: analysisMarketDataSnapshotArb(),
+    timeframe: fc.constantFrom('1m', '5m', '15m', '1h', '4h', '1d'),
+    additionalContext: fc.option(fc.string({ minLength: 10, maxLength: 200 }), { nil: undefined })
+  });
+
+/**
+ * Generator for RegimeClassificationResponse
+ */
+export const regimeClassificationResponseArb = (): fc.Arbitrary<RegimeClassificationResponse> =>
+  fc.record({
+    regime: marketRegimeArb(),
+    confidence: fc.double({ min: 0, max: 1, noNaN: true }),
+    reasoning: fc.string({ minLength: 10, maxLength: 500 }),
+    supportingFactors: fc.array(fc.string({ minLength: 5, maxLength: 100 }), { minLength: 0, maxLength: 5 }),
+    modelId: fc.uuid(),
+    promptVersion: fc.stringOf(fc.constantFrom('1', '2', '3', '.'), { minLength: 1, maxLength: 5 }),
+    processingTimeMs: fc.integer({ min: 10, max: 10000 }),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for valid RegimeClassificationResponse (always valid output)
+ */
+export const validRegimeClassificationResponseArb = (): fc.Arbitrary<RegimeClassificationResponse> =>
+  fc.record({
+    regime: marketRegimeArb(),
+    confidence: fc.double({ min: 0, max: 1, noNaN: true }),
+    reasoning: fc.string({ minLength: 10, maxLength: 500 }),
+    supportingFactors: fc.array(fc.string({ minLength: 5, maxLength: 100 }), { minLength: 1, maxLength: 5 }),
+    modelId: fc.uuid(),
+    promptVersion: fc.stringOf(fc.constantFrom('1', '2', '3', '.'), { minLength: 1, maxLength: 5 }),
+    processingTimeMs: fc.integer({ min: 10, max: 10000 }),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for StrategyAction
+ */
+export const strategyActionArb = (): fc.Arbitrary<StrategyAction> =>
+  fc.record({
+    type: fc.constantFrom('ENTRY', 'EXIT', 'INCREASE', 'DECREASE', 'HOLD'),
+    symbol: cryptoSymbolArb(),
+    quantity: fc.option(fc.double({ min: 0.001, max: 1000, noNaN: true }), { nil: undefined }),
+    price: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+    reason: fc.string({ minLength: 10, maxLength: 200 })
+  });
+
+/**
+ * Generator for ExplanationFactor
+ */
+export const explanationFactorArb = (): fc.Arbitrary<ExplanationFactor> =>
+  fc.record({
+    factor: fc.string({ minLength: 5, maxLength: 100 }),
+    impact: fc.constantFrom('POSITIVE', 'NEGATIVE', 'NEUTRAL'),
+    weight: fc.double({ min: 0, max: 1, noNaN: true })
+  });
+
+/**
+ * Generator for ExplanationRequest
+ */
+export const explanationRequestArb = (): fc.Arbitrary<ExplanationRequest> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    strategyId: fc.uuid(),
+    action: strategyActionArb(),
+    marketContext: analysisMarketDataSnapshotArb(),
+    strategyParameters: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }).filter(s => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(s)),
+      fc.oneof(
+        fc.double({ min: -1000, max: 1000, noNaN: true }),
+        fc.string({ minLength: 1, maxLength: 50 }),
+        fc.boolean()
+      ),
+      { minKeys: 0, maxKeys: 5 }
+    )
+  });
+
+/**
+ * Generator for ExplanationResponse
+ */
+export const explanationResponseArb = (): fc.Arbitrary<ExplanationResponse> =>
+  fc.record({
+    explanation: fc.string({ minLength: 50, maxLength: 1000 }),
+    keyFactors: fc.array(explanationFactorArb(), { minLength: 1, maxLength: 5 }),
+    riskAssessment: fc.string({ minLength: 20, maxLength: 500 }),
+    modelId: fc.uuid(),
+    promptVersion: fc.stringOf(fc.constantFrom('1', '2', '3', '.'), { minLength: 1, maxLength: 5 }),
+    processingTimeMs: fc.integer({ min: 10, max: 10000 }),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for ParameterSuggestion
+ */
+export const parameterSuggestionArb = (): fc.Arbitrary<ParameterSuggestion> =>
+  fc.record({
+    parameterName: fc.string({ minLength: 1, maxLength: 30 }).filter(s => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(s)),
+    currentValue: fc.oneof(
+      fc.double({ min: -1000, max: 1000, noNaN: true }),
+      fc.string({ minLength: 1, maxLength: 50 }),
+      fc.boolean()
+    ),
+    suggestedValue: fc.oneof(
+      fc.double({ min: -1000, max: 1000, noNaN: true }),
+      fc.string({ minLength: 1, maxLength: 50 }),
+      fc.boolean()
+    ),
+    rationale: fc.string({ minLength: 20, maxLength: 300 }),
+    expectedImpact: fc.string({ minLength: 10, maxLength: 200 }),
+    confidence: fc.double({ min: 0, max: 1, noNaN: true })
+  });
+
+/**
+ * Generator for ParameterSuggestionResponse
+ */
+export const parameterSuggestionResponseArb = (): fc.Arbitrary<ParameterSuggestionResponse> =>
+  fc.record({
+    suggestions: fc.array(parameterSuggestionArb(), { minLength: 0, maxLength: 5 }),
+    overallAssessment: fc.string({ minLength: 20, maxLength: 500 }),
+    modelId: fc.uuid(),
+    promptVersion: fc.stringOf(fc.constantFrom('1', '2', '3', '.'), { minLength: 1, maxLength: 5 }),
+    processingTimeMs: fc.integer({ min: 10, max: 10000 }),
+    timestamp: isoDateStringArb()
+  });
+
+
+/**
+ * Audit Record Generators
+ * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
+ */
+
+import {
+  AuditRecord,
+  AuditRequest,
+  AuditResponse,
+  TokenUsage,
+  AuditFilters,
+  DateRange
+} from '../types/audit';
+
+/**
+ * Generator for TokenUsage
+ */
+export const tokenUsageArb = (): fc.Arbitrary<TokenUsage> =>
+  fc.record({
+    promptTokens: fc.integer({ min: 1, max: 10000 }),
+    completionTokens: fc.integer({ min: 1, max: 10000 }),
+    totalTokens: fc.integer({ min: 2, max: 20000 })
+  }).map(usage => ({
+    ...usage,
+    totalTokens: usage.promptTokens + usage.completionTokens
+  }));
+
+/**
+ * Generator for AuditRequest
+ */
+export const auditRequestArb = (): fc.Arbitrary<AuditRequest> =>
+  fc.record({
+    promptTemplateId: fc.uuid(),
+    promptVersion: fc.integer({ min: 1, max: 100 }),
+    renderedPrompt: fc.string({ minLength: 50, maxLength: 2000 }),
+    marketDataHash: fc.hexaString({ minLength: 64, maxLength: 64 })
+  });
+
+/**
+ * Generator for AuditResponse
+ */
+export const auditResponseArb = (): fc.Arbitrary<AuditResponse> =>
+  fc.record({
+    rawOutput: fc.string({ minLength: 50, maxLength: 2000 }),
+    validatedOutput: fc.oneof(
+      regimeClassificationResponseArb(),
+      explanationResponseArb(),
+      fc.constant(null)
+    ),
+    validationPassed: fc.boolean(),
+    processingTimeMs: fc.integer({ min: 10, max: 30000 }),
+    tokenUsage: tokenUsageArb(),
+    costUsd: fc.double({ min: 0, max: 10, noNaN: true })
+  });
+
+/**
+ * Generator for AuditRecord
+ */
+export const auditRecordArb = (): fc.Arbitrary<AuditRecord> =>
+  fc.record({
+    auditId: fc.uuid(),
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    analysisType: fc.constantFrom('REGIME_CLASSIFICATION', 'EXPLANATION', 'PARAMETER_SUGGESTION'),
+    request: auditRequestArb(),
+    response: auditResponseArb(),
+    timestamp: isoDateStringArb(),
+    retentionExpiresAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for AuditRecord with specific tenant
+ */
+export const auditRecordForTenantArb = (tenantId: string): fc.Arbitrary<AuditRecord> =>
+  auditRecordArb().map(record => ({ ...record, tenantId }));
+
+/**
+ * Generator for AuditFilters
+ */
+export const auditFiltersArb = (): fc.Arbitrary<AuditFilters> =>
+  fc.record({
+    modelConfigId: fc.option(fc.uuid(), { nil: undefined }),
+    analysisType: fc.option(fc.constantFrom('REGIME_CLASSIFICATION', 'EXPLANATION', 'PARAMETER_SUGGESTION'), { nil: undefined }),
+    startDate: fc.option(isoDateStringArb(), { nil: undefined }),
+    endDate: fc.option(isoDateStringArb(), { nil: undefined }),
+    limit: fc.option(fc.integer({ min: 1, max: 1000 }), { nil: undefined })
+  });
+
+/**
+ * Generator for DateRange
+ */
+export const dateRangeArb = (): fc.Arbitrary<DateRange> =>
+  validDateRangeArb().map(range => ({
+    startDate: range.startDate,
+    endDate: range.endDate
+  }));
+
+/**
+ * Generator for a list of AuditRecords for the same tenant
+ */
+export const auditRecordListForTenantArb = (): fc.Arbitrary<{
+  tenantId: string;
+  records: AuditRecord[];
+}> =>
+  fc.tuple(
+    fc.uuid(),
+    fc.integer({ min: 1, max: 20 })
+  ).chain(([tenantId, count]) =>
+    fc.array(
+      auditRecordArb(),
+      { minLength: count, maxLength: count }
+    ).map(records => ({
+      tenantId,
+      records: records.map(r => ({ ...r, tenantId }))
+    }))
+  );
+
+/**
+ * Generator for CreateAuditRecordInput (for audit service)
+ */
+export const createAuditRecordInputArb = (): fc.Arbitrary<{
+  tenantId: string;
+  modelConfigId: string;
+  analysisType: string;
+  request: AuditRequest;
+  response: AuditResponse;
+}> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    modelConfigId: fc.uuid(),
+    analysisType: fc.constantFrom('REGIME_CLASSIFICATION', 'EXPLANATION', 'PARAMETER_SUGGESTION'),
+    request: auditRequestArb(),
+    response: auditResponseArb()
+  });

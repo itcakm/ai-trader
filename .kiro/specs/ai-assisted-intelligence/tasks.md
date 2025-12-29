@@ -6,316 +6,316 @@ This plan implements the AI-Assisted Intelligence feature using TypeScript with 
 
 ## Tasks
 
-- [ ] 1. Set up project structure and core types
-  - [ ] 1.1 Initialize TypeScript project with dependencies
+- [x] 1. Set up project structure and core types
+  - [x] 1.1 Initialize TypeScript project with dependencies
     - Add dependencies: aws-sdk, ajv (JSON schema), fast-check, jest, ts-jest
     - Configure tsconfig.json and jest.config.js
     - _Requirements: N/A (infrastructure)_
-  - [ ] 1.2 Create provider abstraction types
+  - [x] 1.2 Create provider abstraction types
     - Create `src/types/provider.ts` with AIProvider, ProviderType, ProviderStatus, RateLimitConfig
     - Create `src/types/adapter.ts` with AIProviderAdapter interface and all method signatures
     - _Requirements: 1.1, 1.3_
-  - [ ] 1.3 Create model configuration types
+  - [x] 1.3 Create model configuration types
     - Create `src/types/model-config.ts` with ModelConfiguration, EncryptedCredentials, CostLimits
     - _Requirements: 2.1, 2.4_
-  - [ ] 1.4 Create analysis types
+  - [x] 1.4 Create analysis types
     - Create `src/types/analysis.ts` with MarketRegime, RegimeClassificationRequest/Response, ExplanationRequest/Response
     - Create `src/types/market-data.ts` with MarketDataSnapshot, PricePoint, VolumePoint
     - _Requirements: 3.1, 3.2, 4.1_
-  - [ ] 1.5 Create allocation types
+  - [x] 1.5 Create allocation types
     - Create `src/types/allocation.ts` with FundAllocation, ModelAllocation
     - _Requirements: 5.1, 5.2_
-  - [ ] 1.6 Create audit types
+  - [x] 1.6 Create audit types
     - Create `src/types/audit.ts` with AuditRecord, AuditRequest, AuditResponse, TokenUsage
     - _Requirements: 10.1, 10.2_
 
-- [ ] 2. Implement JSON schema validation
-  - [ ] 2.1 Create schema definitions
+- [x] 2. Implement JSON schema validation
+  - [x] 2.1 Create schema definitions
     - Create `src/schemas/regime-classification.ts` with RegimeClassificationSchema
     - Create `src/schemas/explanation.ts` with ExplanationSchema
     - Create `src/schemas/parameter-suggestion.ts` with ParameterSuggestionSchema
     - _Requirements: 9.1, 9.3_
-  - [ ] 2.2 Implement schema validator service
+  - [x] 2.2 Implement schema validator service
     - Create `src/services/schema-validator.ts`
     - Implement validateRegimeClassification(), validateExplanation(), validateParameterSuggestion()
     - Return detailed error messages with field paths
     - _Requirements: 9.1, 9.2_
-  - [ ] 2.3 Write property test for schema validation completeness
+  - [x] 2.3 Write property test for schema validation completeness
     - **Property 18: Schema Validation Completeness**
     - **Validates: Requirements 9.1, 9.2, 9.3**
-  - [ ] 2.4 Implement validation failure tracking
+  - [x] 2.4 Implement validation failure tracking
     - Create `src/services/failure-tracker.ts`
     - Track consecutive failures per model, trigger alerts at threshold
     - _Requirements: 9.4_
-  - [ ] 2.5 Write property test for validation failure tracking
+  - [x] 2.5 Write property test for validation failure tracking
     - **Property 19: Validation Failure Tracking**
     - **Validates: Requirements 9.4**
 
-- [ ] 3. Checkpoint - Schema validation complete
+- [x] 3. Checkpoint - Schema validation complete
   - Ensure all validation tests pass, ask the user if questions arise.
 
-- [ ] 4. Implement provider adapter layer
-  - [ ] 4.1 Create base adapter class
+- [x] 4. Implement provider adapter layer
+  - [x] 4.1 Create base adapter class
     - Create `src/adapters/base-adapter.ts` with common functionality
     - Implement request/response logging, error handling, retry logic
     - _Requirements: 1.3_
-  - [ ] 4.2 Implement Gemini adapter
+  - [x] 4.2 Implement Gemini adapter
     - Create `src/adapters/gemini-adapter.ts` implementing AIProviderAdapter
     - Implement classifyMarketRegime(), generateExplanation(), healthCheck()
     - _Requirements: 1.1, 1.3_
-  - [ ] 4.3 Implement OpenAI adapter
+  - [x] 4.3 Implement OpenAI adapter
     - Create `src/adapters/openai-adapter.ts` implementing AIProviderAdapter
     - Implement all AIProviderAdapter methods
     - _Requirements: 1.1, 1.3_
-  - [ ] 4.4 Implement DeepSeek adapter
+  - [x] 4.4 Implement DeepSeek adapter
     - Create `src/adapters/deepseek-adapter.ts` implementing AIProviderAdapter
     - Implement all AIProviderAdapter methods
     - _Requirements: 1.1, 1.3_
-  - [ ] 4.5 Create adapter factory
+  - [x] 4.5 Create adapter factory
     - Create `src/adapters/adapter-factory.ts`
     - Implement getAdapter(providerType) returning correct adapter instance
     - _Requirements: 1.3_
-  - [ ] 4.6 Write property test for adapter interface compliance
+  - [x] 4.6 Write property test for adapter interface compliance
     - **Property 1: Provider Adapter Interface Compliance**
     - **Validates: Requirements 1.3**
 
-- [ ] 5. Implement provider management
-  - [ ] 5.1 Create provider repository
+- [x] 5. Implement provider management
+  - [x] 5.1 Create provider repository
     - Create `src/repositories/provider.ts`
     - Implement CRUD operations for AIProvider in DynamoDB
     - _Requirements: 1.1, 1.2_
-  - [ ] 5.2 Implement provider status management
+  - [x] 5.2 Implement provider status management
     - Create `src/services/provider-status.ts`
     - Implement markInactive(), isActive(), track rate limits
     - _Requirements: 1.4, 1.5_
-  - [ ] 5.3 Write property test for provider status management
+  - [x] 5.3 Write property test for provider status management
     - **Property 2: Provider Status Management**
     - **Validates: Requirements 1.4**
 
-- [ ] 6. Implement model configuration service
-  - [ ] 6.1 Create model configuration repository
+- [x] 6. Implement model configuration service
+  - [x] 6.1 Create model configuration repository
     - Create `src/repositories/model-config.ts`
     - Implement tenant-scoped CRUD operations
     - _Requirements: 2.1, 2.4_
-  - [ ] 6.2 Write property test for model configuration persistence
+  - [x] 6.2 Write property test for model configuration persistence
     - **Property 3: Model Configuration Persistence Round-Trip**
     - **Validates: Requirements 2.4**
-  - [ ] 6.3 Implement credential validation
+  - [x] 6.3 Implement credential validation
     - Create `src/services/credential-validator.ts`
     - Validate API credentials before saving configuration
     - _Requirements: 2.1_
-  - [ ] 6.4 Implement available models filtering
+  - [x] 6.4 Implement available models filtering
     - Create `src/services/model-config.ts`
     - Implement listAvailableModels() with provider status and tenant enable filtering
     - _Requirements: 2.2, 2.3_
-  - [ ] 6.5 Write property test for available models filtering
+  - [x] 6.5 Write property test for available models filtering
     - **Property 4: Available Models Filtering**
     - **Validates: Requirements 2.3**
-  - [ ] 6.6 Implement cost limit enforcement
+  - [x] 6.6 Implement cost limit enforcement
     - Add cost tracking to model configuration
     - Implement checkCostLimit(), recordCost(), resetDailyCost()
     - _Requirements: 2.5_
-  - [ ] 6.7 Write property test for cost limit enforcement
+  - [x] 6.7 Write property test for cost limit enforcement
     - **Property 5: Cost Limit Enforcement**
     - **Validates: Requirements 2.5**
 
-- [ ] 7. Checkpoint - Provider and model configuration complete
+- [x] 7. Checkpoint - Provider and model configuration complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement prompt template service
-  - [ ] 8.1 Create prompt template repository
+- [x] 8. Implement prompt template service
+  - [x] 8.1 Create prompt template repository
     - Create `src/repositories/prompt-template.ts`
     - Implement S3-based storage with versioning
     - _Requirements: 8.1_
-  - [ ] 8.2 Implement template versioning
+  - [x] 8.2 Implement template versioning
     - Create `src/services/prompt-template.ts`
     - Implement createTemplate(), updateTemplate() with version incrementing
     - _Requirements: 8.2_
-  - [ ] 8.3 Write property test for prompt template versioning
+  - [x] 8.3 Write property test for prompt template versioning
     - **Property 16: Prompt Template Versioning**
     - **Validates: Requirements 8.2**
-  - [ ] 8.4 Implement parameter substitution
+  - [x] 8.4 Implement parameter substitution
     - Implement renderTemplate() with {{parameter}} syntax
     - Validate required parameters are provided
     - _Requirements: 8.3, 8.4_
-  - [ ] 8.5 Write property test for prompt parameter substitution
+  - [x] 8.5 Write property test for prompt parameter substitution
     - **Property 17: Prompt Parameter Substitution**
     - **Validates: Requirements 8.3, 8.4**
 
-- [ ] 9. Implement AI analysis service
-  - [ ] 9.1 Create analysis service core
+- [x] 9. Implement AI analysis service
+  - [x] 9.1 Create analysis service core
     - Create `src/services/ai-analysis.ts`
     - Implement classifyMarketRegime() orchestrating adapter, validation, logging
     - _Requirements: 3.1, 3.4_
-  - [ ] 9.2 Implement regime output constraints
+  - [x] 9.2 Implement regime output constraints
     - Validate regime is valid enum value
     - Validate confidence is 0.0-1.0
     - _Requirements: 3.2, 3.3_
-  - [ ] 9.3 Write property test for regime classification output constraints
+  - [x] 9.3 Write property test for regime classification output constraints
     - **Property 6: Regime Classification Output Constraints**
     - **Validates: Requirements 3.2, 3.3**
-  - [ ] 9.4 Implement fallback behavior
+  - [x] 9.4 Implement fallback behavior
     - Return UNCERTAIN with confidence 0 on validation failure
     - Log validation errors
     - _Requirements: 3.5_
-  - [ ] 9.5 Write property test for schema validation with fallback
+  - [x] 9.5 Write property test for schema validation with fallback
     - **Property 7: Schema Validation with Fallback**
     - **Validates: Requirements 3.4, 3.5**
-  - [ ] 9.6 Implement explanation generation
+  - [x] 9.6 Implement explanation generation
     - Implement generateExplanation() with template tracking
     - _Requirements: 4.1, 4.3, 4.4_
-  - [ ] 9.7 Write property test for explanation generation with template tracking
+  - [x] 9.7 Write property test for explanation generation with template tracking
     - **Property 8: Explanation Generation with Template Tracking**
     - **Validates: Requirements 4.3, 4.4, 4.5**
 
-- [ ] 10. Implement fund allocation service
-  - [ ] 10.1 Create allocation repository
+- [x] 10. Implement fund allocation service
+  - [x] 10.1 Create allocation repository
     - Create `src/repositories/allocation.ts`
     - Implement versioned storage in DynamoDB
     - _Requirements: 5.3_
-  - [ ] 10.2 Implement allocation validation
+  - [x] 10.2 Implement allocation validation
     - Create `src/services/allocation.ts`
     - Validate sum=100%, count 1-5, min 10% per model
     - _Requirements: 5.1, 5.2, 5.4_
-  - [ ] 10.3 Write property test for allocation validation rules
+  - [x] 10.3 Write property test for allocation validation rules
     - **Property 9: Allocation Validation Rules**
     - **Validates: Requirements 5.1, 5.2, 5.4**
-  - [ ] 10.4 Implement allocation versioning
+  - [x] 10.4 Implement allocation versioning
     - Implement updateAllocation() creating new versions
     - Implement getAllocationHistory()
     - _Requirements: 5.3_
-  - [ ] 10.5 Write property test for allocation versioning
+  - [x] 10.5 Write property test for allocation versioning
     - **Property 10: Allocation Versioning**
     - **Validates: Requirements 5.3**
 
-- [ ] 11. Checkpoint - Core services complete
+- [x] 11. Checkpoint - Core services complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Implement ensemble service
-  - [ ] 12.1 Create ensemble orchestrator
+- [x] 12. Implement ensemble service
+  - [x] 12.1 Create ensemble orchestrator
     - Create `src/services/ensemble.ts`
     - Implement parallel model invocation with Promise.allSettled
     - _Requirements: 7.1_
-  - [ ] 12.2 Write property test for ensemble parallel execution
+  - [x] 12.2 Write property test for ensemble parallel execution
     - **Property 12: Ensemble Parallel Execution**
     - **Validates: Requirements 7.1**
-  - [ ] 12.3 Implement weighted aggregation
+  - [x] 12.3 Implement weighted aggregation
     - Implement aggregateRegimeResults() with allocation-based weights
     - Calculate weighted average confidence
     - _Requirements: 7.2_
-  - [ ] 12.4 Write property test for ensemble weighted aggregation
+  - [x] 12.4 Write property test for ensemble weighted aggregation
     - **Property 13: Ensemble Weighted Aggregation**
     - **Validates: Requirements 7.2**
-  - [ ] 12.5 Implement disagreement handling
+  - [x] 12.5 Implement disagreement handling
     - Detect regime disagreement, set consensus=false
     - Include all individual results
     - _Requirements: 7.3_
-  - [ ] 12.6 Write property test for ensemble disagreement handling
+  - [x] 12.6 Write property test for ensemble disagreement handling
     - **Property 14: Ensemble Disagreement Handling**
     - **Validates: Requirements 7.3**
-  - [ ] 12.7 Implement timeout handling
+  - [x] 12.7 Implement timeout handling
     - Use Promise.race with configurable timeout
     - Return partial results on timeout
     - _Requirements: 7.4_
-  - [ ] 12.8 Write property test for ensemble timeout handling
+  - [x] 12.8 Write property test for ensemble timeout handling
     - **Property 15: Ensemble Timeout Handling**
     - **Validates: Requirements 7.4**
-  - [ ] 12.9 Implement total failure fallback
+  - [x] 12.9 Implement total failure fallback
     - Return fallback response when all models fail
     - Trigger alert
     - _Requirements: 7.5_
 
-- [ ] 13. Implement performance tracking service
-  - [ ] 13.1 Create performance repository
+- [x] 13. Implement performance tracking service
+  - [x] 13.1 Create performance repository
     - Create `src/repositories/performance.ts`
     - Implement prediction and metrics storage
     - _Requirements: 6.2, 6.3_
-  - [ ] 13.2 Implement prediction recording
+  - [x] 13.2 Implement prediction recording
     - Create `src/services/performance.ts`
     - Implement recordPrediction() on each analysis
     - _Requirements: 6.1, 6.2_
-  - [ ] 13.3 Implement prediction validation
+  - [x] 13.3 Implement prediction validation
     - Implement validatePrediction() comparing to actual regime
     - Update accuracy metrics
     - _Requirements: 6.1_
-  - [ ] 13.4 Write property test for performance tracking and metrics
+  - [x] 13.4 Write property test for performance tracking and metrics
     - **Property 11: Performance Tracking and Metrics**
     - **Validates: Requirements 6.1, 6.2, 6.3**
-  - [ ] 13.5 Implement model comparison
+  - [x] 13.5 Implement model comparison
     - Implement compareModels() returning metrics for all used models
     - Support daily, weekly, monthly periods
     - _Requirements: 6.4, 6.5_
 
-- [ ] 14. Implement audit service
-  - [ ] 14.1 Create audit repository
+- [x] 14. Implement audit service
+  - [x] 14.1 Create audit repository
     - Create `src/repositories/audit.ts`
     - Implement S3-based storage with tenant partitioning
     - _Requirements: 10.1, 10.2_
-  - [ ] 14.2 Implement audit logging
+  - [x] 14.2 Implement audit logging
     - Create `src/services/audit.ts`
     - Implement logAnalysis() capturing all required fields
     - _Requirements: 10.1, 10.2, 10.3_
-  - [ ] 14.3 Write property test for audit record completeness
+  - [x] 14.3 Write property test for audit record completeness
     - **Property 20: Audit Record Completeness**
     - **Validates: Requirements 10.1, 10.2, 10.3**
-  - [ ] 14.4 Implement tenant isolation
+  - [x] 14.4 Implement tenant isolation
     - Ensure queries filter by tenantId
     - Validate tenant access on retrieval
     - _Requirements: 10.4_
-  - [ ] 14.5 Write property test for audit tenant isolation
+  - [x] 14.5 Write property test for audit tenant isolation
     - **Property 21: Audit Tenant Isolation**
     - **Validates: Requirements 10.4**
-  - [ ] 14.6 Implement retention management
+  - [x] 14.6 Implement retention management
     - Set TTL on audit records based on retention period
     - Implement exportAuditPackage()
     - _Requirements: 10.5_
 
-- [ ] 15. Checkpoint - All services complete
+- [x] 15. Checkpoint - All services complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Implement Lambda handlers
-  - [ ] 16.1 Create provider API handlers
+- [x] 16. Implement Lambda handlers
+  - [x] 16.1 Create provider API handlers
     - Create `src/handlers/providers.ts`
     - Implement GET /providers, POST /providers, PATCH /providers/{id}/status
     - _Requirements: 1.1, 1.4_
-  - [ ] 16.2 Create model configuration API handlers
+  - [x] 16.2 Create model configuration API handlers
     - Create `src/handlers/model-configs.ts`
     - Implement CRUD endpoints for model configurations
     - _Requirements: 2.1, 2.2, 2.3_
-  - [ ] 16.3 Create analysis API handlers
+  - [x] 16.3 Create analysis API handlers
     - Create `src/handlers/analysis.ts`
     - Implement POST /analysis/regime, POST /analysis/explanation
     - _Requirements: 3.1, 4.1_
-  - [ ] 16.4 Create allocation API handlers
+  - [x] 16.4 Create allocation API handlers
     - Create `src/handlers/allocations.ts`
     - Implement CRUD endpoints for fund allocations
     - _Requirements: 5.1, 5.3_
-  - [ ] 16.5 Create ensemble API handlers
+  - [x] 16.5 Create ensemble API handlers
     - Create `src/handlers/ensemble.ts`
     - Implement POST /ensemble/analyze
     - _Requirements: 7.1_
-  - [ ] 16.6 Create performance API handlers
+  - [x] 16.6 Create performance API handlers
     - Create `src/handlers/performance.ts`
     - Implement GET /performance/{modelId}, GET /performance/compare
     - _Requirements: 6.4, 6.5_
-  - [ ] 16.7 Create audit API handlers
+  - [x] 16.7 Create audit API handlers
     - Create `src/handlers/audit.ts`
     - Implement GET /audit, POST /audit/export
     - _Requirements: 10.4, 10.5_
 
-- [ ] 17. Create test generators and integration tests
-  - [ ] 17.1 Create fast-check generators
+- [x] 17. Create test generators and integration tests
+  - [x] 17.1 Create fast-check generators
     - Create `src/test/generators.ts`
     - Implement generators for Provider, ModelConfiguration, FundAllocation, MarketData, RegimeClassification, AuditRecord
     - _Requirements: N/A (testing infrastructure)_
-  - [ ] 17.2 Write integration tests for analysis flow
+  - [x] 17.2 Write integration tests for analysis flow
     - Test configure model → request analysis → validate output → log audit
     - _Requirements: 3.1, 4.1, 10.1_
-  - [ ] 17.3 Write integration tests for ensemble flow
+  - [x] 17.3 Write integration tests for ensemble flow
     - Test allocate models → request ensemble → aggregate results
     - _Requirements: 7.1, 7.2_
 
-- [ ] 18. Final checkpoint - All tests pass
+- [x] 18. Final checkpoint - All tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

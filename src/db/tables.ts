@@ -14,7 +14,12 @@ export const TableNames = {
   NEWS_EVENTS: process.env.NEWS_EVENTS_TABLE || 'news-events',
   SENTIMENT_DATA: process.env.SENTIMENT_TABLE || 'sentiment-data',
   STREAMS: process.env.STREAMS_TABLE || 'streams',
-  BACKFILL_REQUESTS: process.env.BACKFILL_REQUESTS_TABLE || 'backfill-requests'
+  BACKFILL_REQUESTS: process.env.BACKFILL_REQUESTS_TABLE || 'backfill-requests',
+  PROVIDERS: process.env.PROVIDERS_TABLE || 'ai-providers',
+  MODEL_CONFIGURATIONS: process.env.MODEL_CONFIGURATIONS_TABLE || 'model-configurations',
+  ALLOCATIONS: process.env.ALLOCATIONS_TABLE || 'fund-allocations',
+  PERFORMANCE: process.env.PERFORMANCE_TABLE || 'model-performance',
+  PREDICTIONS: process.env.PREDICTIONS_TABLE || 'performance-predictions'
 } as const;
 
 /**
@@ -107,6 +112,54 @@ export const KeySchemas = {
   BACKFILL_REQUESTS: {
     partitionKey: 'tenantId',
     sortKey: 'requestId'
+  },
+
+  /**
+   * AI Providers Table
+   * - Partition Key: providerId
+   */
+  PROVIDERS: {
+    partitionKey: 'providerId'
+  },
+
+  /**
+   * Model Configurations Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: configId
+   */
+  MODEL_CONFIGURATIONS: {
+    partitionKey: 'tenantId',
+    sortKey: 'configId'
+  },
+
+  /**
+   * Fund Allocations Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: strategyId#version (composite for versioning)
+   */
+  ALLOCATIONS: {
+    partitionKey: 'tenantId',
+    sortKey: 'strategyIdVersion'
+  },
+
+  /**
+   * Model Performance Table
+   * - Partition Key: tenantId#modelConfigId (composite for tenant isolation)
+   * - Sort Key: period#periodStart (composite for time-based queries)
+   */
+  PERFORMANCE: {
+    partitionKey: 'tenantModelConfigId',
+    sortKey: 'periodPeriodStart'
+  },
+
+  /**
+   * Performance Predictions Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: predictionId
+   */
+  PREDICTIONS: {
+    partitionKey: 'tenantId',
+    sortKey: 'predictionId'
   }
 } as const;
 
@@ -138,5 +191,18 @@ export const GSINames = {
   BACKFILL_REQUESTS: {
     STATUS_INDEX: 'status-index',
     SOURCE_INDEX: 'sourceId-index'
+  },
+  PROVIDERS: {
+    TYPE_INDEX: 'type-index',
+    STATUS_INDEX: 'status-index'
+  },
+  MODEL_CONFIGURATIONS: {
+    PROVIDER_INDEX: 'providerId-index'
+  },
+  ALLOCATIONS: {
+    STRATEGY_VERSION_INDEX: 'strategyId-version-index'
+  },
+  PREDICTIONS: {
+    MODEL_TIMESTAMP_INDEX: 'modelConfigId-timestamp-index'
   }
 } as const;
