@@ -10,7 +10,11 @@ export const TableNames = {
   STRATEGIES: process.env.STRATEGIES_TABLE || 'strategies',
   VERSIONS: process.env.VERSIONS_TABLE || 'strategy-versions',
   DEPLOYMENTS: process.env.DEPLOYMENTS_TABLE || 'deployments',
-  DATA_SOURCES: process.env.DATA_SOURCES_TABLE || 'data-sources'
+  DATA_SOURCES: process.env.DATA_SOURCES_TABLE || 'data-sources',
+  NEWS_EVENTS: process.env.NEWS_EVENTS_TABLE || 'news-events',
+  SENTIMENT_DATA: process.env.SENTIMENT_TABLE || 'sentiment-data',
+  STREAMS: process.env.STREAMS_TABLE || 'streams',
+  BACKFILL_REQUESTS: process.env.BACKFILL_REQUESTS_TABLE || 'backfill-requests'
 } as const;
 
 /**
@@ -63,6 +67,46 @@ export const KeySchemas = {
    */
   DATA_SOURCES: {
     partitionKey: 'sourceId'
+  },
+
+  /**
+   * News Events Table
+   * - Partition Key: symbol
+   * - Sort Key: publishedAt#eventId
+   */
+  NEWS_EVENTS: {
+    partitionKey: 'symbol',
+    sortKey: 'publishedAtEventId'
+  },
+
+  /**
+   * Sentiment Data Table
+   * - Partition Key: symbol
+   * - Sort Key: timestamp
+   */
+  SENTIMENT_DATA: {
+    partitionKey: 'symbol',
+    sortKey: 'timestamp'
+  },
+
+  /**
+   * Streams Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: streamId
+   */
+  STREAMS: {
+    partitionKey: 'tenantId',
+    sortKey: 'streamId'
+  },
+
+  /**
+   * Backfill Requests Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: requestId
+   */
+  BACKFILL_REQUESTS: {
+    partitionKey: 'tenantId',
+    sortKey: 'requestId'
   }
 } as const;
 
@@ -79,5 +123,20 @@ export const GSINames = {
   DATA_SOURCES: {
     TYPE_INDEX: 'type-index',
     STATUS_INDEX: 'status-index'
+  },
+  NEWS_EVENTS: {
+    CONTENT_HASH_INDEX: 'contentHash-index',
+    SOURCE_PUBLISHED_INDEX: 'source-publishedAt-index'
+  },
+  SENTIMENT_DATA: {
+    SOURCE_INDEX: 'aggregatedFrom-timestamp-index'
+  },
+  STREAMS: {
+    STATUS_INDEX: 'status-index',
+    SOURCE_INDEX: 'sourceId-index'
+  },
+  BACKFILL_REQUESTS: {
+    STATUS_INDEX: 'status-index',
+    SOURCE_INDEX: 'sourceId-index'
   }
 } as const;

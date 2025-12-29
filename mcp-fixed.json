@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "power-terraform-terraform": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "hashicorp/terraform-mcp-server"
+      ],
+      "env": {},
+      "disabled": false
+    },
+    "atlassian-rovo": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/sse"]
+    }
+  }
+}
