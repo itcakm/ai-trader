@@ -13,10 +13,12 @@
     "@aws-sdk/client-timestream-write": "^3.700.0",
     "ajv": "^8.17.1",
     "aws-sdk": "^2.1692.0",
+    "ioredis": "^5.8.2",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.159",
+    "@types/ioredis": "^4.28.10",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.2",
     "@types/uuid": "^10.0.0",

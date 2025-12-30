@@ -19,7 +19,12 @@ export const TableNames = {
   MODEL_CONFIGURATIONS: process.env.MODEL_CONFIGURATIONS_TABLE || 'model-configurations',
   ALLOCATIONS: process.env.ALLOCATIONS_TABLE || 'fund-allocations',
   PERFORMANCE: process.env.PERFORMANCE_TABLE || 'model-performance',
-  PREDICTIONS: process.env.PREDICTIONS_TABLE || 'performance-predictions'
+  PREDICTIONS: process.env.PREDICTIONS_TABLE || 'performance-predictions',
+  POSITION_LIMITS: process.env.POSITION_LIMITS_TABLE || 'position-limits',
+  DRAWDOWN_STATE: process.env.DRAWDOWN_STATE_TABLE || 'drawdown-state',
+  DRAWDOWN_CONFIG: process.env.DRAWDOWN_CONFIG_TABLE || 'drawdown-config',
+  VOLATILITY_STATE: process.env.VOLATILITY_STATE_TABLE || 'volatility-state',
+  VOLATILITY_CONFIG: process.env.VOLATILITY_CONFIG_TABLE || 'volatility-config'
 } as const;
 
 /**
@@ -160,6 +165,55 @@ export const KeySchemas = {
   PREDICTIONS: {
     partitionKey: 'tenantId',
     sortKey: 'predictionId'
+  },
+
+  /**
+   * Position Limits Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: limitId
+   */
+  POSITION_LIMITS: {
+    partitionKey: 'tenantId',
+    sortKey: 'limitId'
+  },
+
+  /**
+   * Drawdown State Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: stateId
+   */
+  DRAWDOWN_STATE: {
+    partitionKey: 'tenantId',
+    sortKey: 'stateId'
+  },
+
+  /**
+   * Drawdown Config Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: configId
+   */
+  DRAWDOWN_CONFIG: {
+    partitionKey: 'tenantId',
+    sortKey: 'configId'
+  },
+
+  /**
+   * Volatility State Table
+   * - Partition Key: stateId
+   * - GSI: assetId-index for querying by asset
+   */
+  VOLATILITY_STATE: {
+    partitionKey: 'stateId'
+  },
+
+  /**
+   * Volatility Config Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: configId
+   */
+  VOLATILITY_CONFIG: {
+    partitionKey: 'tenantId',
+    sortKey: 'configId'
   }
 } as const;
 
@@ -204,5 +258,25 @@ export const GSINames = {
   },
   PREDICTIONS: {
     MODEL_TIMESTAMP_INDEX: 'modelConfigId-timestamp-index'
+  },
+  POSITION_LIMITS: {
+    SCOPE_INDEX: 'scope-index',
+    ASSET_INDEX: 'assetId-index',
+    STRATEGY_INDEX: 'strategyId-index'
+  },
+  DRAWDOWN_STATE: {
+    SCOPE_INDEX: 'scope-index',
+    STRATEGY_INDEX: 'strategyId-index',
+    STATUS_INDEX: 'status-index'
+  },
+  DRAWDOWN_CONFIG: {
+    STRATEGY_INDEX: 'strategyId-index'
+  },
+  VOLATILITY_STATE: {
+    ASSET_INDEX: 'assetId-index',
+    LEVEL_INDEX: 'level-index'
+  },
+  VOLATILITY_CONFIG: {
+    ASSET_INDEX: 'assetId-index'
   }
 } as const;

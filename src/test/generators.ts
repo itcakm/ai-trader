@@ -2437,3 +2437,947 @@ export const createAuditRecordInputArb = (): fc.Arbitrary<{
     request: auditRequestArb(),
     response: auditResponseArb()
   });
+
+
+/**
+ * Position Limit Generators
+ * Requirements: 1.1, 1.2, 1.3
+ */
+
+import {
+  PositionLimit,
+  PositionLimitInput,
+  LimitType,
+  LimitScope,
+  LimitCheckResult
+} from '../types/position-limit';
+import { OrderRequest, OrderSide, OrderType } from '../types/order';
+
+/**
+ * Generator for LimitType
+ */
+export const limitTypeArb = (): fc.Arbitrary<LimitType> =>
+  fc.constantFrom('ABSOLUTE', 'PERCENTAGE');
+
+/**
+ * Generator for LimitScope
+ */
+export const limitScopeArb = (): fc.Arbitrary<LimitScope> =>
+  fc.constantFrom('ASSET', 'STRATEGY', 'PORTFOLIO');
+
+/**
+ * Generator for OrderSide
+ */
+export const orderSideArb = (): fc.Arbitrary<OrderSide> =>
+  fc.constantFrom('BUY', 'SELL');
+
+/**
+ * Generator for OrderType
+ */
+export const orderTypeArb = (): fc.Arbitrary<OrderType> =>
+  fc.constantFrom('MARKET', 'LIMIT', 'STOP');
+
+/**
+ * Generator for PositionLimitInput
+ */
+export const positionLimitInputArb = (): fc.Arbitrary<PositionLimitInput> =>
+  fc.oneof(
+    // ASSET scope
+    fc.record({
+      scope: fc.constant('ASSET' as LimitScope),
+      assetId: fc.uuid(),
+      limitType: limitTypeArb(),
+      maxValue: fc.double({ min: 1, max: 1000000, noNaN: true })
+    }),
+    // STRATEGY scope
+    fc.record({
+      scope: fc.constant('STRATEGY' as LimitScope),
+      strategyId: fc.uuid(),
+      limitType: limitTypeArb(),
+      maxValue: fc.double({ min: 1, max: 1000000, noNaN: true })
+    }),
+    // PORTFOLIO scope
+    fc.record({
+      scope: fc.constant('PORTFOLIO' as LimitScope),
+      limitType: limitTypeArb(),
+      maxValue: fc.double({ min: 1, max: 1000000, noNaN: true })
+    })
+  );
+
+/**
+ * Generator for PositionLimit
+ * Note: PERCENTAGE limits are constrained to 0-100 (representing 0-100% of portfolio)
+ */
+export const positionLimitArb = (): fc.Arbitrary<PositionLimit> =>
+  limitScopeArb().chain(scope =>
+    limitTypeArb().chain(limitType =>
+      fc.record({
+        limitId: fc.uuid(),
+        tenantId: fc.uuid(),
+        scope: fc.constant(scope),
+        assetId: scope === 'ASSET' ? fc.uuid() : fc.constant(undefined),
+        strategyId: scope === 'STRATEGY' ? fc.uuid() : fc.constant(undefined),
+        limitType: fc.constant(limitType),
+        // PERCENTAGE limits must be 0-100, ABSOLUTE limits can be any positive value
+        maxValue: limitType === 'PERCENTAGE' 
+          ? fc.double({ min: 1, max: 100, noNaN: true })
+          : fc.double({ min: 1, max: 1000000, noNaN: true }),
+        currentValue: fc.double({ min: 0, max: 500000, noNaN: true }),
+        utilizationPercent: fc.double({ min: 0, max: 100, noNaN: true }),
+        createdAt: isoDateStringArb(),
+        updatedAt: isoDateStringArb()
+      })
+    )
+  );
+
+/**
+ * Generator for PositionLimit with specific scope
+ * Note: PERCENTAGE limits are constrained to 0-100 (representing 0-100% of portfolio)
+ */
+export const positionLimitWithScopeArb = (scope: LimitScope): fc.Arbitrary<PositionLimit> =>
+  limitTypeArb().chain(limitType =>
+    fc.record({
+      limitId: fc.uuid(),
+      tenantId: fc.uuid(),
+      scope: fc.constant(scope),
+      assetId: scope === 'ASSET' ? fc.uuid() : fc.constant(undefined),
+      strategyId: scope === 'STRATEGY' ? fc.uuid() : fc.constant(undefined),
+      limitType: fc.constant(limitType),
+      // PERCENTAGE limits must be 0-100, ABSOLUTE limits can be any positive value
+      maxValue: limitType === 'PERCENTAGE'
+        ? fc.double({ min: 1, max: 100, noNaN: true })
+        : fc.double({ min: 1, max: 1000000, noNaN: true }),
+      currentValue: fc.double({ min: 0, max: 500000, noNaN: true }),
+      utilizationPercent: fc.double({ min: 0, max: 100, noNaN: true }),
+      createdAt: isoDateStringArb(),
+      updatedAt: isoDateStringArb()
+    })
+  );
+
+/**
+ * Generator for OrderRequest
+ */
+export const orderRequestArb = (): fc.Arbitrary<OrderRequest> =>
+  fc.record({
+    orderId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    side: orderSideArb(),
+    quantity: fc.double({ min: 0.001, max: 1000, noNaN: true }),
+    price: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+    orderType: orderTypeArb(),
+    exchangeId: fc.constantFrom('binance', 'coinbase', 'kraken'),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for OrderRequest that matches a PositionLimit
+ */
+export const orderRequestForLimitArb = (limit: PositionLimit): fc.Arbitrary<OrderRequest> =>
+  fc.record({
+    orderId: fc.uuid(),
+    tenantId: fc.constant(limit.tenantId),
+    strategyId: limit.strategyId ? fc.constant(limit.strategyId) : fc.uuid(),
+    assetId: limit.assetId ? fc.constant(limit.assetId) : cryptoSymbolArb(),
+    side: orderSideArb(),
+    quantity: fc.double({ min: 0.001, max: 1000, noNaN: true }),
+    price: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+    orderType: orderTypeArb(),
+    exchangeId: fc.constantFrom('binance', 'coinbase', 'kraken'),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for PositionLimit and OrderRequest that would exceed the limit
+ * Note: For PERCENTAGE limits, we use a fixed portfolioValue of 100000 and calculate
+ * the effective max as (maxValue / 100) * portfolioValue
+ */
+export const limitExceedingOrderArb = (): fc.Arbitrary<{
+  limit: PositionLimit;
+  order: OrderRequest;
+  portfolioValue?: number;
+}> =>
+  positionLimitArb().chain(limit => {
+    const portfolioValue = 100000;
+    // For PERCENTAGE limits, effectiveMax = (maxValue% / 100) * portfolioValue
+    // For ABSOLUTE limits, effectiveMax = maxValue
+    const effectiveMax = limit.limitType === 'PERCENTAGE' 
+      ? (limit.maxValue / 100) * portfolioValue 
+      : limit.maxValue;
+    const remaining = Math.max(0, effectiveMax - limit.currentValue);
+    
+    // Generate order that exceeds remaining capacity
+    return fc.record({
+      orderId: fc.uuid(),
+      tenantId: fc.constant(limit.tenantId),
+      strategyId: limit.strategyId ? fc.constant(limit.strategyId) : fc.uuid(),
+      assetId: limit.assetId ? fc.constant(limit.assetId) : cryptoSymbolArb(),
+      side: fc.constant('BUY' as OrderSide),
+      quantity: fc.double({ min: remaining + 1, max: remaining + 10000, noNaN: true }),
+      price: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+      orderType: orderTypeArb(),
+      exchangeId: fc.constantFrom('binance', 'coinbase', 'kraken'),
+      timestamp: isoDateStringArb()
+    }).map(order => ({
+      limit,
+      order,
+      portfolioValue: limit.limitType === 'PERCENTAGE' ? portfolioValue : undefined
+    }));
+  });
+
+/**
+ * Generator for PositionLimit and OrderRequest that stays within the limit
+ * Note: For PERCENTAGE limits, maxValue is constrained to 0-100 and we use a fixed portfolioValue
+ */
+export const limitWithinOrderArb = (): fc.Arbitrary<{
+  limit: PositionLimit;
+  order: OrderRequest;
+  portfolioValue?: number;
+}> =>
+  limitTypeArb().chain(limitType =>
+    fc.record({
+      limitId: fc.uuid(),
+      tenantId: fc.uuid(),
+      scope: limitScopeArb(),
+      limitType: fc.constant(limitType),
+      // PERCENTAGE limits must be 0-100, ABSOLUTE limits can be any positive value
+      maxValue: limitType === 'PERCENTAGE'
+        ? fc.double({ min: 10, max: 100, noNaN: true })
+        : fc.double({ min: 100, max: 1000000, noNaN: true }),
+      createdAt: isoDateStringArb(),
+      updatedAt: isoDateStringArb()
+    }).chain(baseLimit => {
+      const portfolioValue = 100000;
+      // For PERCENTAGE limits, effectiveMax = (maxValue% / 100) * portfolioValue
+      // For ABSOLUTE limits, effectiveMax = maxValue
+      const effectiveMax = baseLimit.limitType === 'PERCENTAGE'
+        ? (baseLimit.maxValue / 100) * portfolioValue
+        : baseLimit.maxValue;
+      
+      // Set current value to leave room for orders (30% of effective max utilized)
+      const currentValue = effectiveMax * 0.3;
+      const remaining = effectiveMax - currentValue;
+      
+      const limit: PositionLimit = {
+        ...baseLimit,
+        assetId: baseLimit.scope === 'ASSET' ? 'BTC' : undefined,
+        strategyId: baseLimit.scope === 'STRATEGY' ? 'strategy-1' : undefined,
+        currentValue,
+        utilizationPercent: 30
+      };
+      
+      return fc.record({
+        orderId: fc.uuid(),
+        tenantId: fc.constant(limit.tenantId),
+        strategyId: limit.strategyId ? fc.constant(limit.strategyId) : fc.uuid(),
+        assetId: limit.assetId ? fc.constant(limit.assetId) : cryptoSymbolArb(),
+        side: fc.constant('BUY' as OrderSide),
+        quantity: fc.double({ min: 0.001, max: remaining * 0.5, noNaN: true }), // Max 50% of remaining
+        price: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+        orderType: orderTypeArb(),
+        exchangeId: fc.constantFrom('binance', 'coinbase', 'kraken'),
+        timestamp: isoDateStringArb()
+      }).map(order => ({
+        limit,
+        order,
+        portfolioValue: limit.limitType === 'PERCENTAGE' ? portfolioValue : undefined
+      }));
+    })
+  );
+
+
+/**
+ * Generator for ExecutionReport
+ */
+export const executionReportArb = (): fc.Arbitrary<import('../types/order').ExecutionReport> =>
+  fc.record({
+    executionId: fc.uuid(),
+    orderId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    side: orderSideArb(),
+    executedQuantity: fc.double({ min: 0.001, max: 1000, noNaN: true }),
+    executedPrice: fc.double({ min: 0.01, max: 100000, noNaN: true }),
+    commission: fc.double({ min: 0, max: 100, noNaN: true }),
+    exchangeId: fc.constantFrom('binance', 'coinbase', 'kraken'),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for a sequence of ExecutionReports for the same asset
+ */
+export const executionReportSequenceArb = (): fc.Arbitrary<{
+  tenantId: string;
+  assetId: string;
+  strategyId: string;
+  executions: import('../types/order').ExecutionReport[];
+}> =>
+  fc.tuple(
+    fc.uuid(),
+    cryptoSymbolArb(),
+    fc.uuid(),
+    fc.integer({ min: 1, max: 20 })
+  ).chain(([tenantId, assetId, strategyId, count]) =>
+    fc.array(
+      fc.record({
+        executionId: fc.uuid(),
+        orderId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        strategyId: fc.constant(strategyId),
+        assetId: fc.constant(assetId),
+        side: orderSideArb(),
+        executedQuantity: fc.double({ min: 0.001, max: 100, noNaN: true }),
+        executedPrice: fc.double({ min: 0.01, max: 100000, noNaN: true }),
+        commission: fc.double({ min: 0, max: 10, noNaN: true }),
+        exchangeId: fc.constantFrom('binance', 'coinbase', 'kraken'),
+        timestamp: isoDateStringArb()
+      }),
+      { minLength: count, maxLength: count }
+    ).map(executions => ({
+      tenantId,
+      assetId,
+      strategyId,
+      executions
+    }))
+  );
+
+
+/**
+ * Passive Breach Handler Generators
+ * Requirements: 1.6
+ */
+
+import {
+  BreachStatus,
+  BreachCheckResult,
+  FlaggedPosition,
+  ReductionOrder,
+  PassiveBreachConfig
+} from '../services/passive-breach-handler';
+
+/**
+ * Generator for BreachStatus
+ */
+export const breachStatusArb = (): fc.Arbitrary<BreachStatus> =>
+  fc.constantFrom('NORMAL', 'BREACH', 'WARNING');
+
+/**
+ * Generator for PassiveBreachConfig
+ */
+export const passiveBreachConfigArb = (): fc.Arbitrary<PassiveBreachConfig> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    autoReductionEnabled: fc.boolean(),
+    warningThresholdPercent: fc.double({ min: 70, max: 95, noNaN: true }),
+    reductionTargetPercent: fc.double({ min: 50, max: 90, noNaN: true })
+  });
+
+/**
+ * Generator for a position that will breach its limit when price increases
+ */
+export const breachingPositionScenarioArb = (): fc.Arbitrary<{
+  tenantId: string;
+  assetId: string;
+  strategyId: string;
+  limit: PositionLimit;
+  positionQuantity: number;
+  initialPrice: number;
+  breachingPrice: number;
+  portfolioValue?: number;
+}> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    strategyId: fc.uuid(),
+    maxValue: fc.double({ min: 1000, max: 100000, noNaN: true }),
+    limitType: limitTypeArb(),
+    positionQuantity: fc.double({ min: 1, max: 100, noNaN: true }),
+    initialPrice: fc.double({ min: 10, max: 1000, noNaN: true })
+  }).map(({ tenantId, assetId, strategyId, maxValue, limitType, positionQuantity, initialPrice }) => {
+    // Calculate a price that would cause a breach
+    const portfolioValue = limitType === 'PERCENTAGE' ? maxValue * 100 / 20 : undefined; // 20% limit
+    const effectiveMax = limitType === 'PERCENTAGE' && portfolioValue 
+      ? (maxValue / 100) * portfolioValue 
+      : maxValue;
+    
+    // Initial position value should be within limit
+    const initialValue = positionQuantity * initialPrice;
+    const adjustedQuantity = initialValue > effectiveMax * 0.8 
+      ? (effectiveMax * 0.7) / initialPrice 
+      : positionQuantity;
+    
+    // Calculate a price that would cause breach
+    const breachingPrice = (effectiveMax * 1.2) / adjustedQuantity;
+    
+    const limit: PositionLimit = {
+      limitId: 'limit-' + assetId,
+      tenantId,
+      scope: 'ASSET',
+      assetId,
+      limitType,
+      maxValue,
+      currentValue: adjustedQuantity * initialPrice,
+      utilizationPercent: ((adjustedQuantity * initialPrice) / effectiveMax) * 100,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    return {
+      tenantId,
+      assetId,
+      strategyId,
+      limit,
+      positionQuantity: adjustedQuantity,
+      initialPrice,
+      breachingPrice,
+      portfolioValue
+    };
+  });
+
+/**
+ * Generator for a position that stays within its limit
+ */
+export const nonBreachingPositionScenarioArb = (): fc.Arbitrary<{
+  tenantId: string;
+  assetId: string;
+  strategyId: string;
+  limit: PositionLimit;
+  positionQuantity: number;
+  currentPrice: number;
+  portfolioValue?: number;
+}> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    strategyId: fc.uuid(),
+    maxValue: fc.double({ min: 10000, max: 1000000, noNaN: true }),
+    limitType: limitTypeArb(),
+    utilizationPercent: fc.double({ min: 10, max: 70, noNaN: true }), // Stay well within limit
+    currentPrice: fc.double({ min: 10, max: 1000, noNaN: true })
+  }).map(({ tenantId, assetId, strategyId, maxValue, limitType, utilizationPercent, currentPrice }) => {
+    const portfolioValue = limitType === 'PERCENTAGE' ? maxValue * 100 / 20 : undefined;
+    const effectiveMax = limitType === 'PERCENTAGE' && portfolioValue 
+      ? (maxValue / 100) * portfolioValue 
+      : maxValue;
+    
+    const targetValue = effectiveMax * (utilizationPercent / 100);
+    const positionQuantity = targetValue / currentPrice;
+    
+    const limit: PositionLimit = {
+      limitId: 'limit-' + assetId,
+      tenantId,
+      scope: 'ASSET',
+      assetId,
+      limitType,
+      maxValue,
+      currentValue: targetValue,
+      utilizationPercent,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    return {
+      tenantId,
+      assetId,
+      strategyId,
+      limit,
+      positionQuantity,
+      currentPrice,
+      portfolioValue
+    };
+  });
+
+
+/**
+ * Drawdown Generators
+ * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
+ */
+
+import {
+  DrawdownState,
+  DrawdownConfig,
+  DrawdownStatus,
+  ResetInterval
+} from '../types/drawdown';
+
+/**
+ * Generator for DrawdownStatus
+ */
+export const drawdownStatusArb = (): fc.Arbitrary<DrawdownStatus> =>
+  fc.constantFrom('NORMAL', 'WARNING', 'CRITICAL', 'PAUSED');
+
+/**
+ * Generator for ResetInterval
+ */
+export const resetIntervalArb = (): fc.Arbitrary<ResetInterval> =>
+  fc.constantFrom('DAILY', 'WEEKLY', 'MONTHLY', 'MANUAL');
+
+/**
+ * Generator for DrawdownConfig
+ */
+export const drawdownConfigArb = (): fc.Arbitrary<DrawdownConfig> =>
+  fc.record({
+    configId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    warningThresholdPercent: fc.double({ min: 1, max: 20, noNaN: true }),
+    maxThresholdPercent: fc.double({ min: 5, max: 50, noNaN: true }),
+    resetInterval: resetIntervalArb(),
+    autoResumeEnabled: fc.boolean(),
+    cooldownMinutes: fc.integer({ min: 1, max: 1440 })
+  }).filter(config => config.warningThresholdPercent < config.maxThresholdPercent);
+
+/**
+ * Generator for DrawdownState with consistent values
+ */
+export const drawdownStateArb = (): fc.Arbitrary<DrawdownState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    scope: fc.constantFrom('STRATEGY', 'PORTFOLIO') as fc.Arbitrary<'STRATEGY' | 'PORTFOLIO'>,
+    peakValue: fc.double({ min: 10000, max: 1000000, noNaN: true }),
+    drawdownPercent: fc.double({ min: 0, max: 50, noNaN: true }),
+    warningThreshold: fc.double({ min: 1, max: 20, noNaN: true }),
+    maxThreshold: fc.double({ min: 5, max: 50, noNaN: true }),
+    status: drawdownStatusArb(),
+    lastResetAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  }).filter(state => state.warningThreshold < state.maxThreshold)
+    .map(state => {
+      // Calculate consistent currentValue and drawdownAbsolute from peakValue and drawdownPercent
+      const drawdownAbsolute = (state.drawdownPercent / 100) * state.peakValue;
+      const currentValue = state.peakValue - drawdownAbsolute;
+      return {
+        ...state,
+        currentValue,
+        drawdownAbsolute
+      };
+    });
+
+/**
+ * Generator for DrawdownState in NORMAL status (below warning threshold)
+ */
+export const normalDrawdownStateArb = (): fc.Arbitrary<DrawdownState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    scope: fc.constantFrom('STRATEGY', 'PORTFOLIO') as fc.Arbitrary<'STRATEGY' | 'PORTFOLIO'>,
+    peakValue: fc.double({ min: 10000, max: 1000000, noNaN: true }),
+    warningThreshold: fc.double({ min: 5, max: 20, noNaN: true }),
+    maxThreshold: fc.double({ min: 10, max: 50, noNaN: true }),
+    lastResetAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  }).filter(state => state.warningThreshold < state.maxThreshold)
+    .chain(state => 
+      // Generate drawdown below warning threshold
+      fc.double({ min: 0, max: state.warningThreshold - 0.1, noNaN: true }).map(drawdownPercent => {
+        const drawdownAbsolute = (drawdownPercent / 100) * state.peakValue;
+        const currentValue = state.peakValue - drawdownAbsolute;
+        return {
+          ...state,
+          drawdownPercent,
+          drawdownAbsolute,
+          currentValue,
+          status: 'NORMAL' as DrawdownStatus
+        };
+      })
+    );
+
+/**
+ * Generator for DrawdownState in WARNING status (between warning and max threshold)
+ */
+export const warningDrawdownStateArb = (): fc.Arbitrary<DrawdownState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    scope: fc.constantFrom('STRATEGY', 'PORTFOLIO') as fc.Arbitrary<'STRATEGY' | 'PORTFOLIO'>,
+    peakValue: fc.double({ min: 10000, max: 1000000, noNaN: true }),
+    warningThreshold: fc.double({ min: 5, max: 15, noNaN: true }),
+    maxThreshold: fc.double({ min: 20, max: 50, noNaN: true }),
+    lastResetAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  }).chain(state =>
+    // Generate drawdown between warning and max threshold
+    fc.double({ 
+      min: state.warningThreshold + 0.1, 
+      max: state.maxThreshold - 0.1, 
+      noNaN: true 
+    }).map(drawdownPercent => {
+      const drawdownAbsolute = (drawdownPercent / 100) * state.peakValue;
+      const currentValue = state.peakValue - drawdownAbsolute;
+      return {
+        ...state,
+        drawdownPercent,
+        drawdownAbsolute,
+        currentValue,
+        status: 'WARNING' as DrawdownStatus
+      };
+    })
+  );
+
+/**
+ * Generator for DrawdownState in CRITICAL status (above max threshold)
+ */
+export const criticalDrawdownStateArb = (): fc.Arbitrary<DrawdownState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    scope: fc.constantFrom('STRATEGY', 'PORTFOLIO') as fc.Arbitrary<'STRATEGY' | 'PORTFOLIO'>,
+    peakValue: fc.double({ min: 10000, max: 1000000, noNaN: true }),
+    warningThreshold: fc.double({ min: 5, max: 15, noNaN: true }),
+    maxThreshold: fc.double({ min: 20, max: 40, noNaN: true }),
+    lastResetAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  }).chain(state =>
+    // Generate drawdown above max threshold
+    fc.double({ 
+      min: state.maxThreshold + 0.1, 
+      max: Math.min(state.maxThreshold + 30, 99), 
+      noNaN: true 
+    }).map(drawdownPercent => {
+      const drawdownAbsolute = (drawdownPercent / 100) * state.peakValue;
+      const currentValue = state.peakValue - drawdownAbsolute;
+      return {
+        ...state,
+        drawdownPercent,
+        drawdownAbsolute,
+        currentValue,
+        status: 'CRITICAL' as DrawdownStatus
+      };
+    })
+  );
+
+/**
+ * Generator for DrawdownState in PAUSED status
+ */
+export const pausedDrawdownStateArb = (): fc.Arbitrary<DrawdownState> =>
+  criticalDrawdownStateArb().map(state => ({
+    ...state,
+    status: 'PAUSED' as DrawdownStatus
+  }));
+
+/**
+ * Generator for peak and current value pairs for drawdown calculation testing
+ */
+export const drawdownValuePairArb = (): fc.Arbitrary<{
+  peakValue: number;
+  currentValue: number;
+  expectedDrawdownPercent: number;
+}> =>
+  fc.record({
+    peakValue: fc.double({ min: 1000, max: 1000000, noNaN: true }),
+    drawdownPercent: fc.double({ min: 0, max: 99, noNaN: true })
+  }).map(({ peakValue, drawdownPercent }) => ({
+    peakValue,
+    currentValue: peakValue * (1 - drawdownPercent / 100),
+    expectedDrawdownPercent: drawdownPercent
+  }));
+
+/**
+ * Generator for value sequence that causes drawdown threshold crossing
+ */
+export const drawdownThresholdCrossingArb = (): fc.Arbitrary<{
+  initialValue: number;
+  warningThreshold: number;
+  maxThreshold: number;
+  valueSequence: number[];
+  expectedStatuses: DrawdownStatus[];
+}> =>
+  fc.record({
+    initialValue: fc.double({ min: 100000, max: 1000000, noNaN: true }),
+    warningThreshold: fc.double({ min: 5, max: 15, noNaN: true }),
+    maxThreshold: fc.double({ min: 20, max: 40, noNaN: true })
+  }).filter(({ warningThreshold, maxThreshold }) => warningThreshold < maxThreshold)
+    .map(({ initialValue, warningThreshold, maxThreshold }) => {
+      // Create a sequence of values that crosses thresholds
+      const normalValue = initialValue * (1 - (warningThreshold - 2) / 100);
+      const warningValue = initialValue * (1 - (warningThreshold + 2) / 100);
+      const criticalValue = initialValue * (1 - (maxThreshold + 2) / 100);
+
+      return {
+        initialValue,
+        warningThreshold,
+        maxThreshold,
+        valueSequence: [normalValue, warningValue, criticalValue],
+        expectedStatuses: ['NORMAL', 'WARNING', 'CRITICAL'] as DrawdownStatus[]
+      };
+    });
+
+
+
+/**
+ * Volatility Generators
+ * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
+ */
+
+import {
+  VolatilityState,
+  VolatilityConfig,
+  VolatilityLevel,
+  VolatilityIndexType
+} from '../types/volatility';
+
+/**
+ * Generator for VolatilityLevel
+ */
+export const volatilityLevelArb = (): fc.Arbitrary<VolatilityLevel> =>
+  fc.constantFrom('LOW', 'NORMAL', 'HIGH', 'EXTREME');
+
+/**
+ * Generator for VolatilityIndexType
+ */
+export const volatilityIndexTypeArb = (): fc.Arbitrary<VolatilityIndexType> =>
+  fc.constantFrom('ATR', 'STD_DEV', 'REALIZED_VOL', 'IMPLIED_VOL');
+
+/**
+ * Generator for VolatilityConfig with valid thresholds
+ */
+export const volatilityConfigArb = (): fc.Arbitrary<VolatilityConfig> =>
+  fc.record({
+    configId: fc.uuid(),
+    tenantId: fc.uuid(),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    indexType: volatilityIndexTypeArb(),
+    normalThreshold: fc.double({ min: 5, max: 30, noNaN: true }),
+    highThreshold: fc.double({ min: 30, max: 70, noNaN: true }),
+    extremeThreshold: fc.double({ min: 70, max: 100, noNaN: true }),
+    highThrottlePercent: fc.double({ min: 20, max: 80, noNaN: true }),
+    extremeThrottlePercent: fc.double({ min: 80, max: 100, noNaN: true }),
+    cooldownMinutes: fc.integer({ min: 5, max: 120 })
+  }).filter(config => 
+    config.normalThreshold < config.highThreshold &&
+    config.highThreshold < config.extremeThreshold &&
+    config.highThrottlePercent < config.extremeThrottlePercent
+  );
+
+/**
+ * Generator for VolatilityState with consistent values
+ */
+export const volatilityStateArb = (): fc.Arbitrary<VolatilityState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    currentIndex: fc.double({ min: 0, max: 100, noNaN: true }),
+    indexType: volatilityIndexTypeArb(),
+    level: volatilityLevelArb(),
+    throttlePercent: fc.double({ min: 0, max: 100, noNaN: true }),
+    allowNewEntries: fc.boolean(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for VolatilityState in LOW level
+ */
+export const lowVolatilityStateArb = (): fc.Arbitrary<VolatilityState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    currentIndex: fc.double({ min: 0, max: 19, noNaN: true }),
+    indexType: volatilityIndexTypeArb(),
+    updatedAt: isoDateStringArb()
+  }).map(state => ({
+    ...state,
+    level: 'LOW' as VolatilityLevel,
+    throttlePercent: 0,
+    allowNewEntries: true
+  }));
+
+/**
+ * Generator for VolatilityState in NORMAL level
+ */
+export const normalVolatilityStateArb = (): fc.Arbitrary<VolatilityState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    currentIndex: fc.double({ min: 20, max: 49, noNaN: true }),
+    indexType: volatilityIndexTypeArb(),
+    updatedAt: isoDateStringArb()
+  }).map(state => ({
+    ...state,
+    level: 'NORMAL' as VolatilityLevel,
+    throttlePercent: 0,
+    allowNewEntries: true
+  }));
+
+/**
+ * Generator for VolatilityState in HIGH level
+ */
+export const highVolatilityStateArb = (): fc.Arbitrary<VolatilityState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    currentIndex: fc.double({ min: 50, max: 79, noNaN: true }),
+    indexType: volatilityIndexTypeArb(),
+    highThrottlePercent: fc.double({ min: 20, max: 80, noNaN: true }),
+    updatedAt: isoDateStringArb()
+  }).map(state => ({
+    stateId: state.stateId,
+    assetId: state.assetId,
+    currentIndex: state.currentIndex,
+    indexType: state.indexType,
+    level: 'HIGH' as VolatilityLevel,
+    throttlePercent: state.highThrottlePercent,
+    allowNewEntries: true,
+    updatedAt: state.updatedAt
+  }));
+
+/**
+ * Generator for VolatilityState in EXTREME level
+ */
+export const extremeVolatilityStateArb = (): fc.Arbitrary<VolatilityState> =>
+  fc.record({
+    stateId: fc.uuid(),
+    assetId: cryptoSymbolArb(),
+    currentIndex: fc.double({ min: 80, max: 100, noNaN: true }),
+    indexType: volatilityIndexTypeArb(),
+    extremeThrottlePercent: fc.double({ min: 80, max: 100, noNaN: true }),
+    updatedAt: isoDateStringArb()
+  }).map(state => ({
+    stateId: state.stateId,
+    assetId: state.assetId,
+    currentIndex: state.currentIndex,
+    indexType: state.indexType,
+    level: 'EXTREME' as VolatilityLevel,
+    throttlePercent: state.extremeThrottlePercent,
+    allowNewEntries: false,
+    updatedAt: state.updatedAt
+  }));
+
+/**
+ * Generator for price data points for volatility calculation
+ */
+export const priceDataPointArb = (): fc.Arbitrary<{
+  timestamp: string;
+  high: number;
+  low: number;
+  close: number;
+}> =>
+  fc.record({
+    timestamp: isoDateStringArb(),
+    basePrice: fc.double({ min: 100, max: 100000, noNaN: true }),
+    volatilityPercent: fc.double({ min: 0.5, max: 10, noNaN: true })
+  }).map(({ timestamp, basePrice, volatilityPercent }) => {
+    const range = basePrice * (volatilityPercent / 100);
+    const high = basePrice + range / 2;
+    const low = basePrice - range / 2;
+    const close = low + Math.random() * range;
+    return { timestamp, high, low, close };
+  });
+
+/**
+ * Generator for a sequence of price data points
+ */
+export const priceDataSequenceArb = (length: number = 20): fc.Arbitrary<Array<{
+  timestamp: string;
+  high: number;
+  low: number;
+  close: number;
+}>> =>
+  fc.record({
+    startPrice: fc.double({ min: 1000, max: 50000, noNaN: true }),
+    volatilityPercent: fc.double({ min: 1, max: 15, noNaN: true }),
+    startDate: fc.date({ min: new Date('2024-01-01'), max: new Date('2024-06-01') })
+  }).map(({ startPrice, volatilityPercent, startDate }) => {
+    const dataPoints: Array<{ timestamp: string; high: number; low: number; close: number }> = [];
+    let currentPrice = startPrice;
+
+    for (let i = 0; i < length; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+      
+      const range = currentPrice * (volatilityPercent / 100);
+      const high = currentPrice + range / 2;
+      const low = currentPrice - range / 2;
+      const close = low + Math.random() * range;
+      
+      dataPoints.push({
+        timestamp: date.toISOString(),
+        high,
+        low,
+        close
+      });
+      
+      // Random walk for next price
+      currentPrice = close * (1 + (Math.random() - 0.5) * 0.02);
+    }
+
+    return dataPoints;
+  });
+
+/**
+ * Generator for volatility threshold crossing scenario
+ */
+export const volatilityThresholdCrossingArb = (): fc.Arbitrary<{
+  assetId: string;
+  normalThreshold: number;
+  highThreshold: number;
+  extremeThreshold: number;
+  indexSequence: number[];
+  expectedLevels: VolatilityLevel[];
+}> =>
+  fc.record({
+    assetId: cryptoSymbolArb(),
+    normalThreshold: fc.double({ min: 10, max: 25, noNaN: true }),
+    highThreshold: fc.double({ min: 40, max: 60, noNaN: true }),
+    extremeThreshold: fc.double({ min: 75, max: 90, noNaN: true })
+  }).filter(({ normalThreshold, highThreshold, extremeThreshold }) =>
+    normalThreshold < highThreshold && highThreshold < extremeThreshold
+  ).map(({ assetId, normalThreshold, highThreshold, extremeThreshold }) => {
+    // Create index values that cross each threshold
+    const lowIndex = normalThreshold - 5;
+    const normalIndex = (normalThreshold + highThreshold) / 2;
+    const highIndex = (highThreshold + extremeThreshold) / 2;
+    const extremeIndex = extremeThreshold + 5;
+
+    return {
+      assetId,
+      normalThreshold,
+      highThreshold,
+      extremeThreshold,
+      indexSequence: [lowIndex, normalIndex, highIndex, extremeIndex],
+      expectedLevels: ['LOW', 'NORMAL', 'HIGH', 'EXTREME'] as VolatilityLevel[]
+    };
+  });
+
+/**
+ * Generator for throttle application scenario
+ */
+export const throttleApplicationArb = (): fc.Arbitrary<{
+  orderQuantity: number;
+  throttlePercent: number;
+  expectedQuantity: number;
+}> =>
+  fc.record({
+    orderQuantity: fc.double({ min: 0.1, max: 1000, noNaN: true }),
+    throttlePercent: fc.double({ min: 0, max: 100, noNaN: true })
+  }).map(({ orderQuantity, throttlePercent }) => ({
+    orderQuantity,
+    throttlePercent,
+    expectedQuantity: orderQuantity * (1 - throttlePercent / 100)
+  }));
+
+/**
+ * Generator for cooldown scenario
+ */
+export const cooldownScenarioArb = (): fc.Arbitrary<{
+  assetId: string;
+  previousLevel: VolatilityLevel;
+  newLevel: VolatilityLevel;
+  cooldownMinutes: number;
+  shouldApplyCooldown: boolean;
+}> =>
+  fc.record({
+    assetId: cryptoSymbolArb(),
+    previousLevel: fc.constantFrom('HIGH', 'EXTREME') as fc.Arbitrary<VolatilityLevel>,
+    newLevel: fc.constantFrom('LOW', 'NORMAL') as fc.Arbitrary<VolatilityLevel>,
+    cooldownMinutes: fc.integer({ min: 5, max: 60 })
+  }).map(scenario => ({
+    ...scenario,
+    shouldApplyCooldown: true
+  }));
