@@ -350,7 +350,49 @@ export const ExchangeSafeguardService = {
    * @returns Error category for handling
    */
   categorizeError(error: ExchangeError): ErrorCategory {
-    const errorString = `${error.code} ${error.message} ${error.statusCode || ''}`.toUpperCase();
+    const errorCode = error.code.toUpperCase();
+    const errorMessage = error.message.toUpperCase();
+    const statusCodeStr = error.statusCode ? String(error.statusCode) : '';
+
+    // First, check the error code directly for explicit categorization
+    // This takes priority over pattern matching in the message
+    for (const pattern of ERROR_PATTERNS.RATE_LIMIT) {
+      if (errorCode.includes(pattern)) {
+        return 'RATE_LIMIT';
+      }
+    }
+
+    for (const pattern of ERROR_PATTERNS.INVALID_ORDER) {
+      if (errorCode.includes(pattern)) {
+        return 'INVALID_ORDER';
+      }
+    }
+
+    for (const pattern of ERROR_PATTERNS.EXCHANGE_ERROR) {
+      if (errorCode.includes(pattern)) {
+        return 'EXCHANGE_ERROR';
+      }
+    }
+
+    for (const pattern of ERROR_PATTERNS.RETRYABLE) {
+      if (errorCode.includes(pattern)) {
+        return 'RETRYABLE';
+      }
+    }
+
+    // Then check status code for HTTP-based categorization
+    if (statusCodeStr === '429') {
+      return 'RATE_LIMIT';
+    }
+    if (statusCodeStr === '500') {
+      return 'EXCHANGE_ERROR';
+    }
+    if (statusCodeStr === '503' || statusCodeStr === '504') {
+      return 'RETRYABLE';
+    }
+
+    // Finally, check the message for pattern matching
+    const errorString = `${errorCode} ${errorMessage} ${statusCodeStr}`;
 
     // Check for rate limit errors first (highest priority)
     for (const pattern of ERROR_PATTERNS.RATE_LIMIT) {
@@ -366,17 +408,18 @@ export const ExchangeSafeguardService = {
       }
     }
 
+    // Check for exchange errors before retryable
+    // (exchange errors are more specific than retryable)
+    for (const pattern of ERROR_PATTERNS.EXCHANGE_ERROR) {
+      if (errorString.includes(pattern)) {
+        return 'EXCHANGE_ERROR';
+      }
+    }
+
     // Check for retryable errors
     for (const pattern of ERROR_PATTERNS.RETRYABLE) {
       if (errorString.includes(pattern)) {
         return 'RETRYABLE';
-      }
-    }
-
-    // Check for exchange errors
-    for (const pattern of ERROR_PATTERNS.EXCHANGE_ERROR) {
-      if (errorString.includes(pattern)) {
-        return 'EXCHANGE_ERROR';
       }
     }
 

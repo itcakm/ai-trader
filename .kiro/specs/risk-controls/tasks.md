@@ -348,7 +348,7 @@ This plan implements the Risk & Controls feature using TypeScript with AWS Lambd
     - Test activate → block orders → deactivate
     - _Requirements: 4.1, 4.5_
 
-- [ ] 19. Final checkpoint - All tests pass
+- [x] 19. Final checkpoint - All tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
