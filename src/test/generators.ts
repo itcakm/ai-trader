@@ -3381,3 +3381,295 @@ export const cooldownScenarioArb = (): fc.Arbitrary<{
     ...scenario,
     shouldApplyCooldown: true
   }));
+
+
+/**
+ * Kill Switch Generators
+ * Requirements: 4.1, 4.2, 4.3, 4.5
+ */
+
+import {
+  KillSwitchState,
+  KillSwitchConfig,
+  KillSwitchScope,
+  KillSwitchScopeType,
+  KillTriggerType,
+  KillTriggerCondition,
+  AutoKillTrigger
+} from '../types/kill-switch';
+
+/**
+ * Generator for KillTriggerType
+ */
+export const killTriggerTypeArb = (): fc.Arbitrary<KillTriggerType> =>
+  fc.constantFrom('MANUAL', 'AUTOMATIC');
+
+/**
+ * Generator for KillSwitchScopeType
+ */
+export const killSwitchScopeTypeArb = (): fc.Arbitrary<KillSwitchScopeType> =>
+  fc.constantFrom('TENANT', 'STRATEGY', 'ASSET');
+
+/**
+ * Generator for KillSwitchScope
+ */
+export const killSwitchScopeArb = (): fc.Arbitrary<KillSwitchScope> =>
+  killSwitchScopeTypeArb().chain(type =>
+    fc.record({
+      type: fc.constant(type),
+      id: type === 'TENANT' ? fc.constant(undefined) : fc.uuid()
+    })
+  );
+
+/**
+ * Generator for KillTriggerCondition
+ */
+export const killTriggerConditionArb = (): fc.Arbitrary<KillTriggerCondition> =>
+  fc.oneof(
+    fc.record({
+      type: fc.constant('RAPID_LOSS' as const),
+      lossPercent: fc.double({ min: 1, max: 50, noNaN: true }),
+      timeWindowMinutes: fc.integer({ min: 1, max: 60 })
+    }),
+    fc.record({
+      type: fc.constant('ERROR_RATE' as const),
+      errorPercent: fc.double({ min: 1, max: 100, noNaN: true }),
+      timeWindowMinutes: fc.integer({ min: 1, max: 60 })
+    }),
+    fc.record({
+      type: fc.constant('SYSTEM_ERROR' as const),
+      errorTypes: fc.array(
+        fc.constantFrom('CONNECTION_LOST', 'EXCHANGE_ERROR', 'DATA_CORRUPTION', 'TIMEOUT'),
+        { minLength: 1, maxLength: 4 }
+      )
+    })
+  );
+
+/**
+ * Generator for AutoKillTrigger
+ */
+export const autoKillTriggerArb = (): fc.Arbitrary<AutoKillTrigger> =>
+  fc.record({
+    triggerId: fc.uuid(),
+    condition: killTriggerConditionArb(),
+    enabled: fc.boolean()
+  });
+
+/**
+ * Generator for KillSwitchConfig
+ */
+export const killSwitchConfigArb = (): fc.Arbitrary<KillSwitchConfig> =>
+  fc.record({
+    configId: fc.uuid(),
+    tenantId: fc.uuid(),
+    autoTriggers: fc.array(autoKillTriggerArb(), { minLength: 0, maxLength: 5 }),
+    requireAuthForDeactivation: fc.boolean(),
+    notificationChannels: fc.array(
+      fc.constantFrom('email', 'sms', 'webhook', 'slack'),
+      { minLength: 0, maxLength: 4 }
+    )
+  });
+
+/**
+ * Generator for KillSwitchState (inactive)
+ */
+export const inactiveKillSwitchStateArb = (): fc.Arbitrary<KillSwitchState> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    active: fc.constant(false),
+    triggerType: killTriggerTypeArb(),
+    scope: killSwitchScopeTypeArb(),
+    scopeId: fc.option(fc.uuid(), { nil: undefined }),
+    pendingOrdersCancelled: fc.constant(0)
+  });
+
+/**
+ * Generator for KillSwitchState (active)
+ */
+export const activeKillSwitchStateArb = (): fc.Arbitrary<KillSwitchState> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    active: fc.constant(true),
+    activatedAt: isoDateStringArb(),
+    activatedBy: fc.option(fc.uuid(), { nil: undefined }),
+    activationReason: fc.string({ minLength: 5, maxLength: 200 }),
+    triggerType: killTriggerTypeArb(),
+    scope: killSwitchScopeTypeArb(),
+    scopeId: fc.option(fc.uuid(), { nil: undefined }),
+    pendingOrdersCancelled: fc.integer({ min: 0, max: 100 })
+  });
+
+/**
+ * Generator for KillSwitchState (either active or inactive)
+ */
+export const killSwitchStateArb = (): fc.Arbitrary<KillSwitchState> =>
+  fc.oneof(inactiveKillSwitchStateArb(), activeKillSwitchStateArb());
+
+/**
+ * Generator for risk event that could trigger auto-kill
+ */
+export const riskEventForTriggerArb = (): fc.Arbitrary<{
+  eventType: import('../types/risk-event').RiskEventType;
+  severity: string;
+  lossPercent?: number;
+  errorRate?: number;
+  errorType?: string;
+  timestamp: string;
+}> =>
+  fc.record({
+    eventType: fc.constantFrom(
+      'LIMIT_BREACH', 'DRAWDOWN_BREACH', 'EXCHANGE_ERROR', 'ORDER_REJECTED'
+    ) as fc.Arbitrary<import('../types/risk-event').RiskEventType>,
+    severity: fc.constantFrom('INFO', 'WARNING', 'CRITICAL', 'EMERGENCY'),
+    lossPercent: fc.option(fc.double({ min: 0, max: 100, noNaN: true }), { nil: undefined }),
+    errorRate: fc.option(fc.double({ min: 0, max: 100, noNaN: true }), { nil: undefined }),
+    errorType: fc.option(
+      fc.constantFrom('CONNECTION_LOST', 'EXCHANGE_ERROR', 'DATA_CORRUPTION', 'TIMEOUT'),
+      { nil: undefined }
+    ),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for auto-trigger scenario that should trigger kill switch
+ */
+export const triggeringAutoKillScenarioArb = (): fc.Arbitrary<{
+  config: KillSwitchConfig;
+  event: {
+    eventType: import('../types/risk-event').RiskEventType;
+    severity: string;
+    lossPercent?: number;
+    errorRate?: number;
+    errorType?: string;
+    timestamp: string;
+  };
+}> =>
+  fc.oneof(
+    // RAPID_LOSS trigger scenario
+    fc.record({
+      lossThreshold: fc.double({ min: 5, max: 30, noNaN: true }),
+      timeWindow: fc.integer({ min: 5, max: 30 })
+    }).chain(({ lossThreshold, timeWindow }) =>
+      fc.record({
+        config: fc.record({
+          configId: fc.uuid(),
+          tenantId: fc.uuid(),
+          autoTriggers: fc.constant([{
+            triggerId: 'trigger-1',
+            condition: {
+              type: 'RAPID_LOSS' as const,
+              lossPercent: lossThreshold,
+              timeWindowMinutes: timeWindow
+            },
+            enabled: true
+          }]),
+          requireAuthForDeactivation: fc.boolean(),
+          notificationChannels: fc.constant([])
+        }),
+        event: fc.record({
+          eventType: fc.constant('DRAWDOWN_BREACH' as const),
+          severity: fc.constant('CRITICAL'),
+          lossPercent: fc.double({ min: lossThreshold, max: 100, noNaN: true }),
+          timestamp: isoDateStringArb()
+        })
+      })
+    ),
+    // ERROR_RATE trigger scenario
+    fc.record({
+      errorThreshold: fc.double({ min: 10, max: 50, noNaN: true }),
+      timeWindow: fc.integer({ min: 5, max: 30 })
+    }).chain(({ errorThreshold, timeWindow }) =>
+      fc.record({
+        config: fc.record({
+          configId: fc.uuid(),
+          tenantId: fc.uuid(),
+          autoTriggers: fc.constant([{
+            triggerId: 'trigger-2',
+            condition: {
+              type: 'ERROR_RATE' as const,
+              errorPercent: errorThreshold,
+              timeWindowMinutes: timeWindow
+            },
+            enabled: true
+          }]),
+          requireAuthForDeactivation: fc.boolean(),
+          notificationChannels: fc.constant([])
+        }),
+        event: fc.record({
+          eventType: fc.constant('EXCHANGE_ERROR' as const),
+          severity: fc.constant('CRITICAL'),
+          errorRate: fc.double({ min: errorThreshold, max: 100, noNaN: true }),
+          timestamp: isoDateStringArb()
+        })
+      })
+    ),
+    // SYSTEM_ERROR trigger scenario
+    fc.constantFrom('CONNECTION_LOST', 'EXCHANGE_ERROR', 'DATA_CORRUPTION').chain(errorType =>
+      fc.record({
+        config: fc.record({
+          configId: fc.uuid(),
+          tenantId: fc.uuid(),
+          autoTriggers: fc.constant([{
+            triggerId: 'trigger-3',
+            condition: {
+              type: 'SYSTEM_ERROR' as const,
+              errorTypes: [errorType]
+            },
+            enabled: true
+          }]),
+          requireAuthForDeactivation: fc.boolean(),
+          notificationChannels: fc.constant([])
+        }),
+        event: fc.record({
+          eventType: fc.constant('EXCHANGE_ERROR' as const),
+          severity: fc.constant('EMERGENCY'),
+          errorType: fc.constant(errorType),
+          timestamp: isoDateStringArb()
+        })
+      })
+    )
+  );
+
+/**
+ * Generator for auto-trigger scenario that should NOT trigger kill switch
+ */
+export const nonTriggeringAutoKillScenarioArb = (): fc.Arbitrary<{
+  config: KillSwitchConfig;
+  event: {
+    eventType: import('../types/risk-event').RiskEventType;
+    severity: string;
+    lossPercent?: number;
+    errorRate?: number;
+    errorType?: string;
+    timestamp: string;
+  };
+}> =>
+  fc.record({
+    lossThreshold: fc.double({ min: 20, max: 50, noNaN: true }),
+    timeWindow: fc.integer({ min: 5, max: 30 })
+  }).chain(({ lossThreshold, timeWindow }) =>
+    fc.record({
+      config: fc.record({
+        configId: fc.uuid(),
+        tenantId: fc.uuid(),
+        autoTriggers: fc.constant([{
+          triggerId: 'trigger-1',
+          condition: {
+            type: 'RAPID_LOSS' as const,
+            lossPercent: lossThreshold,
+            timeWindowMinutes: timeWindow
+          },
+          enabled: true
+        }]),
+        requireAuthForDeactivation: fc.boolean(),
+        notificationChannels: fc.constant([])
+      }),
+      event: fc.record({
+        eventType: fc.constant('DRAWDOWN_WARNING' as const),
+        severity: fc.constant('WARNING'),
+        // Loss percent below threshold
+        lossPercent: fc.double({ min: 0, max: lossThreshold - 1, noNaN: true }),
+        timestamp: isoDateStringArb()
+      })
+    })
+  );

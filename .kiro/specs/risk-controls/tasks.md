@@ -127,26 +127,26 @@ This plan implements the Risk & Controls feature using TypeScript with AWS Lambd
 - [x] 6. Checkpoint - Drawdown and volatility complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Implement kill switch service
-  - [ ] 7.1 Create kill switch repository
+- [x] 7. Implement kill switch service
+  - [x] 7.1 Create kill switch repository
     - Create `src/repositories/kill-switch.ts`
     - Implement storage in DynamoDB and ElastiCache for fast access
     - _Requirements: 4.1_
-  - [ ] 7.2 Implement kill switch activation
+  - [x] 7.2 Implement kill switch activation
     - Create `src/services/kill-switch.ts`
     - Implement activate() for manual and automatic triggers
     - Cancel pending orders, block new orders
     - _Requirements: 4.1, 4.2, 4.3_
-  - [ ] 7.3 Write property test for kill switch behavior
+  - [x] 7.3 Write property test for kill switch behavior
     - **Property 9: Kill Switch Behavior**
     - **Validates: Requirements 4.1, 4.2, 4.3**
-  - [ ] 7.4 Implement kill switch deactivation
+  - [x] 7.4 Implement kill switch deactivation
     - Implement deactivate() with authentication requirement
     - _Requirements: 4.5_
-  - [ ] 7.5 Write property test for kill switch deactivation authentication
+  - [x] 7.5 Write property test for kill switch deactivation authentication
     - **Property 10: Kill Switch Deactivation Authentication**
     - **Validates: Requirements 4.5**
-  - [ ] 7.6 Implement auto-trigger evaluation
+  - [x] 7.6 Implement auto-trigger evaluation
     - Implement checkAutoTriggers() for rapid loss, error rate conditions
     - _Requirements: 4.3_
 

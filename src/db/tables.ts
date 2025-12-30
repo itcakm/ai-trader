@@ -24,7 +24,9 @@ export const TableNames = {
   DRAWDOWN_STATE: process.env.DRAWDOWN_STATE_TABLE || 'drawdown-state',
   DRAWDOWN_CONFIG: process.env.DRAWDOWN_CONFIG_TABLE || 'drawdown-config',
   VOLATILITY_STATE: process.env.VOLATILITY_STATE_TABLE || 'volatility-state',
-  VOLATILITY_CONFIG: process.env.VOLATILITY_CONFIG_TABLE || 'volatility-config'
+  VOLATILITY_CONFIG: process.env.VOLATILITY_CONFIG_TABLE || 'volatility-config',
+  KILL_SWITCH_STATE: process.env.KILL_SWITCH_STATE_TABLE || 'kill-switch-state',
+  KILL_SWITCH_CONFIG: process.env.KILL_SWITCH_CONFIG_TABLE || 'kill-switch-config'
 } as const;
 
 /**
@@ -214,6 +216,25 @@ export const KeySchemas = {
   VOLATILITY_CONFIG: {
     partitionKey: 'tenantId',
     sortKey: 'configId'
+  },
+
+  /**
+   * Kill Switch State Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - No Sort Key (one state per tenant)
+   */
+  KILL_SWITCH_STATE: {
+    partitionKey: 'tenantId'
+  },
+
+  /**
+   * Kill Switch Config Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: configId
+   */
+  KILL_SWITCH_CONFIG: {
+    partitionKey: 'tenantId',
+    sortKey: 'configId'
   }
 } as const;
 
@@ -278,5 +299,12 @@ export const GSINames = {
   },
   VOLATILITY_CONFIG: {
     ASSET_INDEX: 'assetId-index'
+  },
+  KILL_SWITCH_STATE: {
+    SCOPE_INDEX: 'scope-index',
+    ACTIVE_INDEX: 'active-index'
+  },
+  KILL_SWITCH_CONFIG: {
+    // No additional indexes needed
   }
 } as const;
