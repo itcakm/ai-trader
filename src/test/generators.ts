@@ -3673,3 +3673,1183 @@ export const nonTriggeringAutoKillScenarioArb = (): fc.Arbitrary<{
       })
     })
   );
+
+
+/**
+ * Circuit Breaker Generators
+ * Requirements: 5.1, 5.2, 5.3, 5.5, 5.6
+ */
+
+import {
+  CircuitBreaker,
+  CircuitBreakerInput,
+  CircuitBreakerState,
+  CircuitBreakerScope,
+  CircuitBreakerCondition,
+  TradingContext,
+  TradingEvent
+} from '../types/circuit-breaker';
+
+/**
+ * Generator for CircuitBreakerState
+ */
+export const circuitBreakerStateArb = (): fc.Arbitrary<CircuitBreakerState> =>
+  fc.constantFrom('CLOSED', 'OPEN', 'HALF_OPEN');
+
+/**
+ * Generator for CircuitBreakerScope
+ */
+export const circuitBreakerScopeArb = (): fc.Arbitrary<CircuitBreakerScope> =>
+  fc.constantFrom('STRATEGY', 'ASSET', 'PORTFOLIO');
+
+/**
+ * Generator for LOSS_RATE condition
+ */
+export const lossRateConditionArb = (): fc.Arbitrary<CircuitBreakerCondition> =>
+  fc.record({
+    type: fc.constant('LOSS_RATE' as const),
+    lossPercent: fc.double({ min: 1, max: 50, noNaN: true }),
+    timeWindowMinutes: fc.integer({ min: 1, max: 60 })
+  });
+
+/**
+ * Generator for CONSECUTIVE_FAILURES condition
+ */
+export const consecutiveFailuresConditionArb = (): fc.Arbitrary<CircuitBreakerCondition> =>
+  fc.record({
+    type: fc.constant('CONSECUTIVE_FAILURES' as const),
+    count: fc.integer({ min: 1, max: 20 })
+  });
+
+/**
+ * Generator for PRICE_DEVIATION condition
+ */
+export const priceDeviationConditionArb = (): fc.Arbitrary<CircuitBreakerCondition> =>
+  fc.record({
+    type: fc.constant('PRICE_DEVIATION' as const),
+    deviationPercent: fc.double({ min: 1, max: 30, noNaN: true }),
+    timeWindowMinutes: fc.integer({ min: 1, max: 60 })
+  });
+
+/**
+ * Generator for ERROR_RATE condition
+ */
+export const errorRateConditionArb = (): fc.Arbitrary<CircuitBreakerCondition> =>
+  fc.record({
+    type: fc.constant('ERROR_RATE' as const),
+    errorPercent: fc.double({ min: 5, max: 80, noNaN: true }),
+    sampleSize: fc.integer({ min: 10, max: 100 })
+  });
+
+/**
+ * Generator for any CircuitBreakerCondition
+ */
+export const circuitBreakerConditionArb = (): fc.Arbitrary<CircuitBreakerCondition> =>
+  fc.oneof(
+    lossRateConditionArb(),
+    consecutiveFailuresConditionArb(),
+    priceDeviationConditionArb(),
+    errorRateConditionArb()
+  );
+
+/**
+ * Generator for CircuitBreakerInput
+ */
+export const circuitBreakerInputArb = (): fc.Arbitrary<CircuitBreakerInput> =>
+  fc.record({
+    name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+    condition: circuitBreakerConditionArb(),
+    scope: circuitBreakerScopeArb(),
+    scopeId: fc.option(fc.uuid(), { nil: undefined }),
+    cooldownMinutes: fc.integer({ min: 1, max: 60 }),
+    autoResetEnabled: fc.boolean()
+  });
+
+/**
+ * Generator for CircuitBreaker (CLOSED state)
+ */
+export const closedCircuitBreakerArb = (): fc.Arbitrary<CircuitBreaker> =>
+  fc.record({
+    breakerId: fc.uuid(),
+    tenantId: fc.uuid(),
+    name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+    condition: circuitBreakerConditionArb(),
+    scope: circuitBreakerScopeArb(),
+    scopeId: fc.option(fc.uuid(), { nil: undefined }),
+    state: fc.constant('CLOSED' as CircuitBreakerState),
+    tripCount: fc.integer({ min: 0, max: 100 }),
+    lastTrippedAt: fc.option(isoDateStringArb(), { nil: undefined }),
+    cooldownMinutes: fc.integer({ min: 1, max: 60 }),
+    autoResetEnabled: fc.boolean()
+  });
+
+/**
+ * Generator for CircuitBreaker (OPEN state)
+ */
+export const openCircuitBreakerArb = (): fc.Arbitrary<CircuitBreaker> =>
+  fc.record({
+    breakerId: fc.uuid(),
+    tenantId: fc.uuid(),
+    name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+    condition: circuitBreakerConditionArb(),
+    scope: circuitBreakerScopeArb(),
+    scopeId: fc.option(fc.uuid(), { nil: undefined }),
+    state: fc.constant('OPEN' as CircuitBreakerState),
+    tripCount: fc.integer({ min: 1, max: 100 }),
+    lastTrippedAt: isoDateStringArb(),
+    cooldownMinutes: fc.integer({ min: 1, max: 60 }),
+    autoResetEnabled: fc.boolean()
+  });
+
+/**
+ * Generator for CircuitBreaker (HALF_OPEN state)
+ */
+export const halfOpenCircuitBreakerArb = (): fc.Arbitrary<CircuitBreaker> =>
+  fc.record({
+    breakerId: fc.uuid(),
+    tenantId: fc.uuid(),
+    name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+    condition: circuitBreakerConditionArb(),
+    scope: circuitBreakerScopeArb(),
+    scopeId: fc.option(fc.uuid(), { nil: undefined }),
+    state: fc.constant('HALF_OPEN' as CircuitBreakerState),
+    tripCount: fc.integer({ min: 1, max: 100 }),
+    lastTrippedAt: isoDateStringArb(),
+    cooldownMinutes: fc.integer({ min: 1, max: 60 }),
+    autoResetEnabled: fc.boolean()
+  });
+
+/**
+ * Generator for any CircuitBreaker
+ */
+export const circuitBreakerArb = (): fc.Arbitrary<CircuitBreaker> =>
+  fc.oneof(
+    closedCircuitBreakerArb(),
+    openCircuitBreakerArb(),
+    halfOpenCircuitBreakerArb()
+  );
+
+/**
+ * Generator for TradingContext
+ */
+export const tradingContextArb = (): fc.Arbitrary<TradingContext> =>
+  fc.record({
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(fc.uuid(), { nil: undefined }),
+    recentLossPercent: fc.option(fc.double({ min: 0, max: 100, noNaN: true }), { nil: undefined }),
+    recentErrorRate: fc.option(fc.double({ min: 0, max: 100, noNaN: true }), { nil: undefined }),
+    priceDeviation: fc.option(fc.double({ min: -50, max: 50, noNaN: true }), { nil: undefined })
+  });
+
+/**
+ * Generator for TradingEvent
+ */
+export const tradingEventArb = (): fc.Arbitrary<TradingEvent> =>
+  fc.record({
+    eventType: fc.constantFrom('TRADE', 'ERROR', 'PRICE_UPDATE'),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(fc.uuid(), { nil: undefined }),
+    success: fc.boolean(),
+    lossAmount: fc.option(fc.double({ min: 0, max: 100, noNaN: true }), { nil: undefined }),
+    errorMessage: fc.option(fc.string({ minLength: 5, maxLength: 100 }), { nil: undefined }),
+    priceDeviation: fc.option(fc.double({ min: -50, max: 50, noNaN: true }), { nil: undefined }),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for a scenario where LOSS_RATE condition should trigger
+ */
+export const triggeringLossRateScenarioArb = (): fc.Arbitrary<{
+  breaker: CircuitBreaker;
+  context: TradingContext;
+}> =>
+  fc.double({ min: 5, max: 30, noNaN: true }).chain(threshold =>
+    fc.record({
+      breaker: fc.record({
+        breakerId: fc.uuid(),
+        tenantId: fc.uuid(),
+        name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+        condition: fc.constant({
+          type: 'LOSS_RATE' as const,
+          lossPercent: threshold,
+          timeWindowMinutes: 10
+        }),
+        scope: fc.constant('PORTFOLIO' as CircuitBreakerScope),
+        scopeId: fc.constant(undefined),
+        state: fc.constant('CLOSED' as CircuitBreakerState),
+        tripCount: fc.integer({ min: 0, max: 10 }),
+        lastTrippedAt: fc.constant(undefined),
+        cooldownMinutes: fc.integer({ min: 5, max: 30 }),
+        autoResetEnabled: fc.boolean()
+      }),
+      context: fc.record({
+        strategyId: fc.option(fc.uuid(), { nil: undefined }),
+        assetId: fc.option(fc.uuid(), { nil: undefined }),
+        // Loss percent at or above threshold
+        recentLossPercent: fc.double({ min: threshold, max: threshold + 20, noNaN: true }),
+        recentErrorRate: fc.option(fc.double({ min: 0, max: 50, noNaN: true }), { nil: undefined }),
+        priceDeviation: fc.option(fc.double({ min: -20, max: 20, noNaN: true }), { nil: undefined })
+      })
+    })
+  );
+
+/**
+ * Generator for a scenario where CONSECUTIVE_FAILURES condition should trigger
+ */
+export const triggeringConsecutiveFailuresScenarioArb = (): fc.Arbitrary<{
+  breaker: CircuitBreaker;
+  failureCount: number;
+}> =>
+  fc.integer({ min: 2, max: 10 }).chain(threshold =>
+    fc.record({
+      breaker: fc.record({
+        breakerId: fc.uuid(),
+        tenantId: fc.uuid(),
+        name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+        condition: fc.constant({
+          type: 'CONSECUTIVE_FAILURES' as const,
+          count: threshold
+        }),
+        scope: fc.constant('PORTFOLIO' as CircuitBreakerScope),
+        scopeId: fc.constant(undefined),
+        state: fc.constant('CLOSED' as CircuitBreakerState),
+        tripCount: fc.integer({ min: 0, max: 10 }),
+        lastTrippedAt: fc.constant(undefined),
+        cooldownMinutes: fc.integer({ min: 5, max: 30 }),
+        autoResetEnabled: fc.boolean()
+      }),
+      // Failure count at or above threshold
+      failureCount: fc.integer({ min: threshold, max: threshold + 5 })
+    })
+  );
+
+/**
+ * Generator for a scenario where PRICE_DEVIATION condition should trigger
+ */
+export const triggeringPriceDeviationScenarioArb = (): fc.Arbitrary<{
+  breaker: CircuitBreaker;
+  context: TradingContext;
+}> =>
+  fc.double({ min: 3, max: 20, noNaN: true }).chain(threshold =>
+    fc.record({
+      breaker: fc.record({
+        breakerId: fc.uuid(),
+        tenantId: fc.uuid(),
+        name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+        condition: fc.constant({
+          type: 'PRICE_DEVIATION' as const,
+          deviationPercent: threshold,
+          timeWindowMinutes: 10
+        }),
+        scope: fc.constant('PORTFOLIO' as CircuitBreakerScope),
+        scopeId: fc.constant(undefined),
+        state: fc.constant('CLOSED' as CircuitBreakerState),
+        tripCount: fc.integer({ min: 0, max: 10 }),
+        lastTrippedAt: fc.constant(undefined),
+        cooldownMinutes: fc.integer({ min: 5, max: 30 }),
+        autoResetEnabled: fc.boolean()
+      }),
+      context: fc.record({
+        strategyId: fc.option(fc.uuid(), { nil: undefined }),
+        assetId: fc.option(fc.uuid(), { nil: undefined }),
+        recentLossPercent: fc.option(fc.double({ min: 0, max: 20, noNaN: true }), { nil: undefined }),
+        recentErrorRate: fc.option(fc.double({ min: 0, max: 50, noNaN: true }), { nil: undefined }),
+        // Price deviation at or above threshold (can be positive or negative)
+        priceDeviation: fc.oneof(
+          fc.double({ min: threshold, max: threshold + 10, noNaN: true }),
+          fc.double({ min: -(threshold + 10), max: -threshold, noNaN: true })
+        )
+      })
+    })
+  );
+
+/**
+ * Generator for a scenario where no condition should trigger
+ */
+export const nonTriggeringScenarioArb = (): fc.Arbitrary<{
+  breaker: CircuitBreaker;
+  context: TradingContext;
+}> =>
+  fc.double({ min: 20, max: 40, noNaN: true }).chain(threshold =>
+    fc.record({
+      breaker: fc.record({
+        breakerId: fc.uuid(),
+        tenantId: fc.uuid(),
+        name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+        condition: fc.constant({
+          type: 'LOSS_RATE' as const,
+          lossPercent: threshold,
+          timeWindowMinutes: 10
+        }),
+        scope: fc.constant('PORTFOLIO' as CircuitBreakerScope),
+        scopeId: fc.constant(undefined),
+        state: fc.constant('CLOSED' as CircuitBreakerState),
+        tripCount: fc.integer({ min: 0, max: 10 }),
+        lastTrippedAt: fc.constant(undefined),
+        cooldownMinutes: fc.integer({ min: 5, max: 30 }),
+        autoResetEnabled: fc.boolean()
+      }),
+      context: fc.record({
+        strategyId: fc.option(fc.uuid(), { nil: undefined }),
+        assetId: fc.option(fc.uuid(), { nil: undefined }),
+        // Loss percent below threshold
+        recentLossPercent: fc.double({ min: 0, max: threshold - 1, noNaN: true }),
+        recentErrorRate: fc.option(fc.double({ min: 0, max: 30, noNaN: true }), { nil: undefined }),
+        priceDeviation: fc.option(fc.double({ min: -10, max: 10, noNaN: true }), { nil: undefined })
+      })
+    })
+  );
+
+/**
+ * Generator for CircuitBreaker with elapsed cooldown (for auto-reset testing)
+ */
+export const breakerWithElapsedCooldownArb = (): fc.Arbitrary<CircuitBreaker> =>
+  fc.integer({ min: 1, max: 30 }).chain(cooldownMinutes => {
+    // Create a timestamp that is older than the cooldown period
+    const pastTime = new Date(Date.now() - (cooldownMinutes + 5) * 60 * 1000).toISOString();
+    
+    return fc.record({
+      breakerId: fc.uuid(),
+      tenantId: fc.uuid(),
+      name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+      condition: circuitBreakerConditionArb(),
+      scope: circuitBreakerScopeArb(),
+      scopeId: fc.option(fc.uuid(), { nil: undefined }),
+      state: fc.constant('OPEN' as CircuitBreakerState),
+      tripCount: fc.integer({ min: 1, max: 100 }),
+      lastTrippedAt: fc.constant(pastTime),
+      cooldownMinutes: fc.constant(cooldownMinutes),
+      autoResetEnabled: fc.constant(true)
+    });
+  });
+
+/**
+ * Generator for CircuitBreaker with non-elapsed cooldown
+ */
+export const breakerWithNonElapsedCooldownArb = (): fc.Arbitrary<CircuitBreaker> =>
+  fc.integer({ min: 10, max: 60 }).chain(cooldownMinutes => {
+    // Create a timestamp that is more recent than the cooldown period
+    const recentTime = new Date(Date.now() - 1 * 60 * 1000).toISOString(); // 1 minute ago
+    
+    return fc.record({
+      breakerId: fc.uuid(),
+      tenantId: fc.uuid(),
+      name: fc.string({ minLength: 3, maxLength: 50 }).filter(s => s.trim().length > 0),
+      condition: circuitBreakerConditionArb(),
+      scope: circuitBreakerScopeArb(),
+      scopeId: fc.option(fc.uuid(), { nil: undefined }),
+      state: fc.constant('OPEN' as CircuitBreakerState),
+      tripCount: fc.integer({ min: 1, max: 100 }),
+      lastTrippedAt: fc.constant(recentTime),
+      cooldownMinutes: fc.constant(cooldownMinutes),
+      autoResetEnabled: fc.constant(true)
+    });
+  });
+
+
+/**
+ * Risk Profile Generators
+ * Requirements: 8.1, 8.2, 8.3, 8.5, 8.6
+ */
+
+import {
+  RiskProfile,
+  RiskProfileInput,
+  PositionLimitConfig,
+  ExchangeSafeguardConfig
+} from '../types/risk-profile';
+
+/**
+ * Generator for valid PositionLimitConfig
+ */
+export const positionLimitConfigArb = (): fc.Arbitrary<PositionLimitConfig> =>
+  fc.oneof(
+    // ASSET scope with assetId
+    fc.record({
+      scope: fc.constant('ASSET' as LimitScope),
+      assetId: fc.uuid(),
+      limitType: limitTypeArb(),
+      maxValue: fc.double({ min: 0.01, max: 100, noNaN: true })
+    }),
+    // STRATEGY scope
+    fc.record({
+      scope: fc.constant('STRATEGY' as LimitScope),
+      assetId: fc.constant(undefined),
+      limitType: limitTypeArb(),
+      maxValue: fc.double({ min: 0.01, max: 100, noNaN: true })
+    }),
+    // PORTFOLIO scope
+    fc.record({
+      scope: fc.constant('PORTFOLIO' as LimitScope),
+      assetId: fc.constant(undefined),
+      limitType: limitTypeArb(),
+      maxValue: fc.double({ min: 0.01, max: 100, noNaN: true })
+    })
+  );
+
+/**
+ * Generator for valid ExchangeSafeguardConfig
+ */
+export const exchangeSafeguardConfigArb = (): fc.Arbitrary<ExchangeSafeguardConfig> =>
+  fc.tuple(
+    fc.double({ min: 0.001, max: 10, noNaN: true }),
+    fc.double({ min: 100, max: 10000, noNaN: true })
+  ).filter(([min, max]) => min < max).chain(([minSize, maxSize]) =>
+    fc.record({
+      minOrderSize: fc.constant(minSize),
+      maxOrderSize: fc.constant(maxSize),
+      maxPriceDeviationPercent: fc.double({ min: 0.1, max: 50, noNaN: true }),
+      rateLimitBuffer: fc.double({ min: 0, max: 50, noNaN: true }),
+      connectionTimeoutMs: fc.integer({ min: 1000, max: 30000 }),
+      maxRetries: fc.integer({ min: 0, max: 10 })
+    })
+  );
+
+/**
+ * Generator for valid DrawdownConfig (without configId and tenantId)
+ */
+export const drawdownConfigInputArb = (): fc.Arbitrary<{
+  warningThresholdPercent: number;
+  maxThresholdPercent: number;
+  resetInterval: ResetInterval;
+  autoResumeEnabled: boolean;
+  cooldownMinutes: number;
+  strategyId?: string;
+}> =>
+  fc.tuple(
+    fc.double({ min: 1, max: 40, noNaN: true }),
+    fc.double({ min: 5, max: 50, noNaN: true })
+  ).filter(([warning, max]) => warning < max).chain(([warning, max]) =>
+    fc.record({
+      warningThresholdPercent: fc.constant(warning),
+      maxThresholdPercent: fc.constant(max),
+      resetInterval: resetIntervalArb(),
+      autoResumeEnabled: fc.boolean(),
+      cooldownMinutes: fc.integer({ min: 0, max: 1440 }),
+      strategyId: fc.option(fc.uuid(), { nil: undefined })
+    })
+  );
+
+/**
+ * Generator for valid VolatilityConfig (without configId and tenantId)
+ */
+export const volatilityConfigInputArb = (): fc.Arbitrary<{
+  indexType: VolatilityIndexType;
+  normalThreshold: number;
+  highThreshold: number;
+  extremeThreshold: number;
+  highThrottlePercent: number;
+  extremeThrottlePercent: number;
+  cooldownMinutes: number;
+  assetId?: string;
+}> =>
+  fc.tuple(
+    fc.double({ min: 0.1, max: 20, noNaN: true }),
+    fc.double({ min: 5, max: 50, noNaN: true }),
+    fc.double({ min: 10, max: 100, noNaN: true })
+  ).filter(([normal, high, extreme]) => normal < high && high < extreme).chain(([normal, high, extreme]) =>
+    fc.record({
+      indexType: volatilityIndexTypeArb(),
+      normalThreshold: fc.constant(normal),
+      highThreshold: fc.constant(high),
+      extremeThreshold: fc.constant(extreme),
+      highThrottlePercent: fc.double({ min: 10, max: 70, noNaN: true }),
+      extremeThrottlePercent: fc.double({ min: 80, max: 100, noNaN: true }),
+      cooldownMinutes: fc.integer({ min: 0, max: 1440 }),
+      assetId: fc.option(fc.uuid(), { nil: undefined })
+    })
+  );
+
+/**
+ * Generator for valid RiskProfileInput
+ */
+export const riskProfileInputArb = (): fc.Arbitrary<RiskProfileInput> =>
+  fc.record({
+    name: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+    positionLimits: fc.array(positionLimitConfigArb(), { minLength: 0, maxLength: 5 }),
+    drawdownConfig: drawdownConfigInputArb(),
+    volatilityConfig: volatilityConfigInputArb(),
+    circuitBreakers: fc.array(circuitBreakerConditionArb(), { minLength: 0, maxLength: 3 }),
+    exchangeSafeguards: exchangeSafeguardConfigArb()
+  });
+
+/**
+ * Generator for valid RiskProfile
+ */
+export const riskProfileArb = (): fc.Arbitrary<RiskProfile> =>
+  riskProfileInputArb().chain(input =>
+    fc.record({
+      profileId: fc.uuid(),
+      tenantId: fc.uuid(),
+      name: fc.constant(input.name),
+      version: fc.integer({ min: 1, max: 100 }),
+      positionLimits: fc.constant(input.positionLimits),
+      drawdownConfig: fc.record({
+        configId: fc.uuid(),
+        tenantId: fc.uuid(),
+        ...Object.fromEntries(
+          Object.entries(input.drawdownConfig).map(([k, v]) => [k, fc.constant(v)])
+        )
+      }) as fc.Arbitrary<any>,
+      volatilityConfig: fc.record({
+        configId: fc.uuid(),
+        tenantId: fc.uuid(),
+        ...Object.fromEntries(
+          Object.entries(input.volatilityConfig).map(([k, v]) => [k, fc.constant(v)])
+        )
+      }) as fc.Arbitrary<any>,
+      circuitBreakers: fc.constant(input.circuitBreakers),
+      exchangeSafeguards: fc.constant(input.exchangeSafeguards),
+      createdAt: isoDateStringArb(),
+      updatedAt: isoDateStringArb()
+    })
+  );
+
+/**
+ * Generator for RiskProfile with specific tenantId
+ */
+export const riskProfileWithTenantArb = (tenantId: string): fc.Arbitrary<RiskProfile> =>
+  riskProfileInputArb().chain(input =>
+    fc.record({
+      profileId: fc.uuid(),
+      tenantId: fc.constant(tenantId),
+      name: fc.constant(input.name),
+      version: fc.integer({ min: 1, max: 100 }),
+      positionLimits: fc.constant(input.positionLimits),
+      drawdownConfig: fc.record({
+        configId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        warningThresholdPercent: fc.constant(input.drawdownConfig.warningThresholdPercent),
+        maxThresholdPercent: fc.constant(input.drawdownConfig.maxThresholdPercent),
+        resetInterval: fc.constant(input.drawdownConfig.resetInterval),
+        autoResumeEnabled: fc.constant(input.drawdownConfig.autoResumeEnabled),
+        cooldownMinutes: fc.constant(input.drawdownConfig.cooldownMinutes),
+        strategyId: fc.constant(input.drawdownConfig.strategyId)
+      }),
+      volatilityConfig: fc.record({
+        configId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        indexType: fc.constant(input.volatilityConfig.indexType),
+        normalThreshold: fc.constant(input.volatilityConfig.normalThreshold),
+        highThreshold: fc.constant(input.volatilityConfig.highThreshold),
+        extremeThreshold: fc.constant(input.volatilityConfig.extremeThreshold),
+        highThrottlePercent: fc.constant(input.volatilityConfig.highThrottlePercent),
+        extremeThrottlePercent: fc.constant(input.volatilityConfig.extremeThrottlePercent),
+        cooldownMinutes: fc.constant(input.volatilityConfig.cooldownMinutes),
+        assetId: fc.constant(input.volatilityConfig.assetId)
+      }),
+      circuitBreakers: fc.constant(input.circuitBreakers),
+      exchangeSafeguards: fc.constant(input.exchangeSafeguards),
+      createdAt: isoDateStringArb(),
+      updatedAt: isoDateStringArb()
+    })
+  );
+
+/**
+ * Generator for RiskProfileOverrides (partial overrides)
+ */
+export const riskProfileOverridesArb = (): fc.Arbitrary<{
+  positionLimits?: PositionLimitConfig[];
+  drawdownConfig?: Partial<{
+    warningThresholdPercent: number;
+    maxThresholdPercent: number;
+    resetInterval: ResetInterval;
+    autoResumeEnabled: boolean;
+    cooldownMinutes: number;
+  }>;
+  volatilityConfig?: Partial<{
+    indexType: VolatilityIndexType;
+    normalThreshold: number;
+    highThreshold: number;
+    extremeThreshold: number;
+    highThrottlePercent: number;
+    extremeThrottlePercent: number;
+    cooldownMinutes: number;
+  }>;
+  circuitBreakers?: CircuitBreakerCondition[];
+  exchangeSafeguards?: Partial<ExchangeSafeguardConfig>;
+}> =>
+  fc.record({
+    positionLimits: fc.option(fc.array(positionLimitConfigArb(), { minLength: 1, maxLength: 3 }), { nil: undefined }),
+    drawdownConfig: fc.option(
+      fc.record({
+        warningThresholdPercent: fc.option(fc.double({ min: 1, max: 20, noNaN: true }), { nil: undefined }),
+        cooldownMinutes: fc.option(fc.integer({ min: 0, max: 120 }), { nil: undefined })
+      }),
+      { nil: undefined }
+    ),
+    volatilityConfig: fc.option(
+      fc.record({
+        highThrottlePercent: fc.option(fc.double({ min: 10, max: 70, noNaN: true }), { nil: undefined }),
+        cooldownMinutes: fc.option(fc.integer({ min: 0, max: 120 }), { nil: undefined })
+      }),
+      { nil: undefined }
+    ),
+    circuitBreakers: fc.option(fc.array(circuitBreakerConditionArb(), { minLength: 1, maxLength: 2 }), { nil: undefined }),
+    exchangeSafeguards: fc.option(
+      fc.record({
+        maxRetries: fc.option(fc.integer({ min: 0, max: 5 }), { nil: undefined }),
+        connectionTimeoutMs: fc.option(fc.integer({ min: 1000, max: 10000 }), { nil: undefined })
+      }),
+      { nil: undefined }
+    )
+  });
+
+/**
+ * Generator for invalid RiskProfileInput (for validation testing)
+ */
+export const invalidRiskProfileInputArb = (): fc.Arbitrary<RiskProfileInput> =>
+  fc.oneof(
+    // Empty name
+    riskProfileInputArb().map(input => ({ ...input, name: '' })),
+    // Warning threshold >= max threshold
+    riskProfileInputArb().map(input => ({
+      ...input,
+      drawdownConfig: {
+        ...input.drawdownConfig,
+        warningThresholdPercent: 50,
+        maxThresholdPercent: 30
+      }
+    })),
+    // Volatility thresholds out of order
+    riskProfileInputArb().map(input => ({
+      ...input,
+      volatilityConfig: {
+        ...input.volatilityConfig,
+        normalThreshold: 50,
+        highThreshold: 30,
+        extremeThreshold: 20
+      }
+    })),
+    // Exchange min >= max order size
+    riskProfileInputArb().map(input => ({
+      ...input,
+      exchangeSafeguards: {
+        ...input.exchangeSafeguards,
+        minOrderSize: 1000,
+        maxOrderSize: 100
+      }
+    })),
+    // Negative values
+    riskProfileInputArb().map(input => ({
+      ...input,
+      drawdownConfig: {
+        ...input.drawdownConfig,
+        cooldownMinutes: -10
+      }
+    }))
+  );
+
+
+/**
+ * Exchange Safeguard Generators
+ * Requirements: 9.1, 9.2, 9.3, 9.6
+ */
+
+import { 
+  ExchangeLimits, 
+  ExchangeHealth, 
+  RateLimitState 
+} from '../repositories/exchange-limits';
+import { 
+  ExchangeError, 
+  ErrorCategory 
+} from '../services/exchange-safeguard';
+
+/**
+ * Generator for exchange IDs
+ */
+export const exchangeIdArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom('binance', 'coinbase', 'kraken', 'ftx', 'bybit', 'okx');
+
+/**
+ * Generator for ExchangeLimits
+ */
+export const exchangeLimitsArb = (): fc.Arbitrary<ExchangeLimits> =>
+  fc.record({
+    exchangeId: exchangeIdArb(),
+    assetId: cryptoSymbolArb(),
+    // Use integer-based generation to avoid floating point issues
+    minOrderSize: fc.integer({ min: 1, max: 1000 }).map(n => n / 10000), // 0.0001 to 0.1
+    maxOrderSize: fc.integer({ min: 1000, max: 100000 }).map(n => n), // 1000 to 100000
+    minPrice: fc.integer({ min: 1, max: 100 }).map(n => n / 100), // 0.01 to 1
+    maxPrice: fc.integer({ min: 100000, max: 1000000 }).map(n => n), // 100000 to 1000000
+    maxPriceDeviationPercent: fc.integer({ min: 1, max: 50 }).map(n => n), // 1 to 50
+    // Use fixed tick and lot sizes to avoid floating point precision issues
+    tickSize: fc.constantFrom(0.01, 0.1, 1),
+    lotSize: fc.constantFrom(0.0001, 0.001, 0.01),
+    createdAt: isoDateStringArb(),
+    updatedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for ExchangeHealth status
+ */
+export const exchangeHealthStatusArb = (): fc.Arbitrary<'HEALTHY' | 'DEGRADED' | 'UNHEALTHY'> =>
+  fc.constantFrom('HEALTHY', 'DEGRADED', 'UNHEALTHY');
+
+/**
+ * Generator for ExchangeHealth
+ */
+export const exchangeHealthArb = (): fc.Arbitrary<ExchangeHealth> =>
+  fc.record({
+    exchangeId: exchangeIdArb(),
+    status: exchangeHealthStatusArb(),
+    latencyMs: fc.integer({ min: 1, max: 5000 }),
+    errorRate: fc.double({ min: 0, max: 1, noNaN: true }),
+    rateLimitRemaining: fc.integer({ min: 0, max: 1000 }),
+    rateLimitResetAt: isoDateStringArb(),
+    lastCheckedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for RateLimitState
+ */
+export const rateLimitStateArb = (): fc.Arbitrary<RateLimitState> =>
+  fc.integer({ min: 100, max: 1000 }).chain(limit =>
+    fc.record({
+      exchangeId: exchangeIdArb(),
+      remaining: fc.integer({ min: 0, max: limit }),
+      limit: fc.constant(limit),
+      resetAt: isoDateStringArb(),
+      windowStart: isoDateStringArb(),
+      requestCount: fc.integer({ min: 0, max: limit }),
+      updatedAt: isoDateStringArb()
+    })
+  );
+
+/**
+ * Generator for ExchangeError
+ */
+export const exchangeErrorArb = (): fc.Arbitrary<ExchangeError> =>
+  fc.record({
+    code: fc.constantFrom(
+      'TIMEOUT', 'RATE_LIMIT', 'INVALID_ORDER', 'EXCHANGE_ERROR', 
+      'CONNECTION_RESET', 'TOO_MANY_REQUESTS', 'INVALID_QUANTITY',
+      'MIN_NOTIONAL', 'INTERNAL_ERROR', 'UNKNOWN_ERROR'
+    ),
+    message: fc.string({ minLength: 5, maxLength: 100 }),
+    exchangeId: exchangeIdArb(),
+    statusCode: fc.option(fc.constantFrom(400, 401, 403, 404, 429, 500, 502, 503, 504), { nil: undefined })
+  });
+
+/**
+ * Generator for retryable exchange errors
+ */
+export const retryableErrorArb = (): fc.Arbitrary<ExchangeError> =>
+  fc.record({
+    code: fc.constantFrom('TIMEOUT', 'CONNECTION_RESET', 'ECONNRESET', 'ETIMEDOUT', 'NETWORK_ERROR'),
+    message: fc.string({ minLength: 5, maxLength: 100 }),
+    exchangeId: exchangeIdArb(),
+    statusCode: fc.option(fc.constantFrom(503, 504), { nil: undefined })
+  });
+
+/**
+ * Generator for rate limit exchange errors
+ */
+export const rateLimitErrorArb = (): fc.Arbitrary<ExchangeError> =>
+  fc.record({
+    code: fc.constantFrom('RATE_LIMIT', 'TOO_MANY_REQUESTS', 'THROTTLED', 'REQUEST_LIMIT_EXCEEDED'),
+    message: fc.string({ minLength: 5, maxLength: 100 }),
+    exchangeId: exchangeIdArb(),
+    statusCode: fc.option(fc.constant(429), { nil: undefined })
+  });
+
+/**
+ * Generator for invalid order exchange errors
+ */
+export const invalidOrderErrorArb = (): fc.Arbitrary<ExchangeError> =>
+  fc.record({
+    code: fc.constantFrom('INVALID_ORDER', 'INVALID_QUANTITY', 'INVALID_PRICE', 'MIN_NOTIONAL', 'LOT_SIZE'),
+    message: fc.string({ minLength: 5, maxLength: 100 }),
+    exchangeId: exchangeIdArb(),
+    statusCode: fc.option(fc.constant(400), { nil: undefined })
+  });
+
+/**
+ * Generator for exchange errors (internal)
+ */
+export const exchangeInternalErrorArb = (): fc.Arbitrary<ExchangeError> =>
+  fc.record({
+    code: fc.constantFrom('EXCHANGE_ERROR', 'INTERNAL_ERROR', 'SYSTEM_ERROR', 'MAINTENANCE'),
+    message: fc.string({ minLength: 5, maxLength: 100 }),
+    exchangeId: exchangeIdArb(),
+    statusCode: fc.option(fc.constant(500), { nil: undefined })
+  });
+
+/**
+ * Generator for order that violates exchange limits (quantity too small)
+ */
+export const orderBelowMinSizeArb = (limits: ExchangeLimits): fc.Arbitrary<OrderRequest> =>
+  fc.record({
+    orderId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.uuid(),
+    assetId: fc.constant(limits.assetId),
+    side: orderSideArb(),
+    quantity: fc.double({ min: 0.00001, max: limits.minOrderSize * 0.99, noNaN: true }),
+    price: fc.option(fc.double({ min: limits.minPrice, max: limits.maxPrice, noNaN: true }), { nil: undefined }),
+    orderType: orderTypeArb(),
+    exchangeId: fc.constant(limits.exchangeId),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for order that violates exchange limits (quantity too large)
+ */
+export const orderAboveMaxSizeArb = (limits: ExchangeLimits): fc.Arbitrary<OrderRequest> =>
+  fc.record({
+    orderId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.uuid(),
+    assetId: fc.constant(limits.assetId),
+    side: orderSideArb(),
+    quantity: fc.double({ min: limits.maxOrderSize * 1.01, max: limits.maxOrderSize * 10, noNaN: true }),
+    price: fc.option(fc.double({ min: limits.minPrice, max: limits.maxPrice, noNaN: true }), { nil: undefined }),
+    orderType: orderTypeArb(),
+    exchangeId: fc.constant(limits.exchangeId),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for order that is within exchange limits
+ */
+export const orderWithinLimitsArb = (limits: ExchangeLimits): fc.Arbitrary<OrderRequest> => {
+  // Round lot size and tick size to avoid floating point precision issues
+  const lotSize = Math.max(limits.lotSize, 0.0001);
+  const tickSize = Math.max(limits.tickSize, 0.01);
+  
+  // Calculate valid quantity range (must be multiple of lot size)
+  const minQty = Math.ceil(limits.minOrderSize / lotSize) * lotSize;
+  const maxQty = Math.floor(limits.maxOrderSize / lotSize) * lotSize;
+  const numLotSteps = Math.max(1, Math.floor((maxQty - minQty) / lotSize));
+  
+  // Calculate valid price range (must be multiple of tick size)
+  const minPrice = Math.ceil(limits.minPrice / tickSize) * tickSize;
+  const maxPrice = Math.floor(limits.maxPrice / tickSize) * tickSize;
+  const numTickSteps = Math.max(1, Math.floor((maxPrice - minPrice) / tickSize));
+  
+  return fc.record({
+    orderId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.uuid(),
+    assetId: fc.constant(limits.assetId),
+    side: orderSideArb(),
+    // Generate quantity as exact multiple of lot size
+    quantity: fc.integer({ min: 0, max: numLotSteps })
+      .map(n => {
+        const qty = minQty + n * lotSize;
+        // Round to avoid floating point precision issues
+        return Math.round(qty * 1e8) / 1e8;
+      }),
+    price: fc.option(
+      fc.integer({ min: 0, max: numTickSteps })
+        .map(n => {
+          const price = minPrice + n * tickSize;
+          // Round to avoid floating point precision issues
+          return Math.round(price * 1e8) / 1e8;
+        }),
+      { nil: undefined }
+    ),
+    orderType: orderTypeArb(),
+    exchangeId: fc.constant(limits.exchangeId),
+    timestamp: isoDateStringArb()
+  });
+};
+
+/**
+ * Generator for order with price deviation exceeding limit
+ */
+export const orderWithPriceDeviationArb = (
+  limits: ExchangeLimits, 
+  currentPrice: number
+): fc.Arbitrary<OrderRequest> => {
+  const deviationMultiplier = 1 + (limits.maxPriceDeviationPercent + 10) / 100;
+  const deviatedPrice = currentPrice * deviationMultiplier;
+  
+  return fc.record({
+    orderId: fc.uuid(),
+    tenantId: fc.uuid(),
+    strategyId: fc.uuid(),
+    assetId: fc.constant(limits.assetId),
+    side: orderSideArb(),
+    quantity: fc.double({ min: limits.minOrderSize, max: limits.maxOrderSize, noNaN: true }),
+    price: fc.constant(deviatedPrice),
+    orderType: fc.constant('LIMIT' as const),
+    exchangeId: fc.constant(limits.exchangeId),
+    timestamp: isoDateStringArb()
+  });
+};
+
+/**
+ * Generator for ExchangeLimits and violating order pair
+ */
+export const limitsAndViolatingOrderArb = (): fc.Arbitrary<{
+  limits: ExchangeLimits;
+  order: OrderRequest;
+  violationType: 'MIN_SIZE' | 'MAX_SIZE' | 'PRICE_DEVIATION';
+}> =>
+  exchangeLimitsArb().chain(limits =>
+    fc.oneof(
+      orderBelowMinSizeArb(limits).map(order => ({
+        limits,
+        order,
+        violationType: 'MIN_SIZE' as const
+      })),
+      orderAboveMaxSizeArb(limits).map(order => ({
+        limits,
+        order,
+        violationType: 'MAX_SIZE' as const
+      }))
+    )
+  );
+
+/**
+ * Generator for ExchangeLimits and valid order pair
+ */
+export const limitsAndValidOrderArb = (): fc.Arbitrary<{
+  limits: ExchangeLimits;
+  order: OrderRequest;
+}> =>
+  exchangeLimitsArb().chain(limits =>
+    orderWithinLimitsArb(limits).map(order => ({
+      limits,
+      order
+    }))
+  );
+
+
+/**
+ * Risk Event Generators
+ * Requirements: 10.1, 10.2, 10.4
+ */
+
+import {
+  RiskEvent,
+  RiskEventInput,
+  RiskEventType,
+  RiskEventSeverity,
+  AlertConfig,
+  AlertChannel,
+  AlertChannelType
+} from '../types/risk-event';
+
+/**
+ * Generator for RiskEventType
+ */
+export const riskEventTypeArb = (): fc.Arbitrary<RiskEventType> =>
+  fc.constantFrom(
+    'LIMIT_BREACH',
+    'LIMIT_WARNING',
+    'DRAWDOWN_WARNING',
+    'DRAWDOWN_BREACH',
+    'VOLATILITY_THROTTLE',
+    'CIRCUIT_BREAKER_TRIP',
+    'CIRCUIT_BREAKER_RESET',
+    'KILL_SWITCH_ACTIVATED',
+    'KILL_SWITCH_DEACTIVATED',
+    'ORDER_REJECTED',
+    'EXCHANGE_ERROR'
+  );
+
+/**
+ * Generator for RiskEventSeverity
+ */
+export const riskEventSeverityArb = (): fc.Arbitrary<RiskEventSeverity> =>
+  fc.constantFrom('INFO', 'WARNING', 'CRITICAL', 'EMERGENCY');
+
+/**
+ * Generator for AlertChannelType
+ */
+export const alertChannelTypeArb = (): fc.Arbitrary<AlertChannelType> =>
+  fc.constantFrom('EMAIL', 'SMS', 'WEBHOOK', 'SLACK');
+
+/**
+ * Generator for AlertChannel
+ */
+export const alertChannelArb = (): fc.Arbitrary<AlertChannel> =>
+  fc.record({
+    type: alertChannelTypeArb(),
+    destination: fc.oneof(
+      fc.emailAddress(),
+      fc.string({ minLength: 10, maxLength: 15 }).map(s => `+1${s.replace(/\D/g, '').slice(0, 10)}`),
+      fc.webUrl(),
+      fc.string({ minLength: 5, maxLength: 50 }).map(s => `#${s.replace(/\s/g, '-')}`)
+    ),
+    enabled: fc.boolean()
+  });
+
+/**
+ * Generator for AlertConfig
+ */
+export const alertConfigArb = (): fc.Arbitrary<AlertConfig> =>
+  fc.record({
+    channels: fc.array(alertChannelArb(), { minLength: 1, maxLength: 5 }),
+    severityThreshold: riskEventSeverityArb(),
+    eventTypes: fc.array(riskEventTypeArb(), { minLength: 0, maxLength: 5 })
+  });
+
+/**
+ * Generator for risk event metadata
+ */
+export const riskEventMetadataArb = (): fc.Arbitrary<Record<string, unknown>> =>
+  fc.dictionary(
+    fc.string({ minLength: 1, maxLength: 20 }).filter(s => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(s)),
+    fc.oneof(
+      fc.string({ minLength: 0, maxLength: 100 }),
+      fc.double({ min: -1000000, max: 1000000, noNaN: true }),
+      fc.boolean(),
+      fc.constant(null)
+    ),
+    { minKeys: 0, maxKeys: 10 }
+  );
+
+/**
+ * Generator for RiskEventInput
+ */
+export const riskEventInputArb = (): fc.Arbitrary<RiskEventInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    eventType: riskEventTypeArb(),
+    severity: riskEventSeverityArb(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: fc.option(riskEventMetadataArb(), { nil: undefined })
+  });
+
+/**
+ * Generator for RiskEvent (complete event with ID and timestamp)
+ */
+export const riskEventArb = (): fc.Arbitrary<RiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: riskEventTypeArb(),
+    severity: riskEventSeverityArb(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for multiple risk events for the same tenant
+ */
+export const tenantRiskEventsArb = (): fc.Arbitrary<{
+  tenantId: string;
+  events: RiskEvent[];
+}> =>
+  fc.uuid().chain(tenantId =>
+    fc.array(
+      fc.record({
+        eventId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        eventType: riskEventTypeArb(),
+        severity: riskEventSeverityArb(),
+        strategyId: fc.option(fc.uuid(), { nil: undefined }),
+        assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+        description: fc.string({ minLength: 10, maxLength: 200 }),
+        triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+        actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+        metadata: riskEventMetadataArb(),
+        timestamp: isoDateStringArb()
+      }),
+      { minLength: 1, maxLength: 20 }
+    ).map(events => ({ tenantId, events }))
+  );
+
+/**
+ * Generator for multi-tenant risk events (for isolation testing)
+ */
+export const multiTenantRiskEventsArb = (): fc.Arbitrary<{
+  tenant1Id: string;
+  tenant1Events: RiskEvent[];
+  tenant2Id: string;
+  tenant2Events: RiskEvent[];
+}> =>
+  fc.tuple(
+    fc.uuid(),
+    fc.uuid()
+  ).filter(([t1, t2]) => t1 !== t2).chain(([tenant1Id, tenant2Id]) =>
+    fc.tuple(
+      fc.array(
+        fc.record({
+          eventId: fc.uuid(),
+          tenantId: fc.constant(tenant1Id),
+          eventType: riskEventTypeArb(),
+          severity: riskEventSeverityArb(),
+          strategyId: fc.option(fc.uuid(), { nil: undefined }),
+          assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+          description: fc.string({ minLength: 10, maxLength: 200 }),
+          triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+          actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+          metadata: riskEventMetadataArb(),
+          timestamp: isoDateStringArb()
+        }),
+        { minLength: 1, maxLength: 10 }
+      ),
+      fc.array(
+        fc.record({
+          eventId: fc.uuid(),
+          tenantId: fc.constant(tenant2Id),
+          eventType: riskEventTypeArb(),
+          severity: riskEventSeverityArb(),
+          strategyId: fc.option(fc.uuid(), { nil: undefined }),
+          assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+          description: fc.string({ minLength: 10, maxLength: 200 }),
+          triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+          actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+          metadata: riskEventMetadataArb(),
+          timestamp: isoDateStringArb()
+        }),
+        { minLength: 1, maxLength: 10 }
+      )
+    ).map(([tenant1Events, tenant2Events]) => ({
+      tenant1Id,
+      tenant1Events,
+      tenant2Id,
+      tenant2Events
+    }))
+  );
+
+/**
+ * Generator for RiskEvent with specific severity
+ */
+export const riskEventWithSeverityArb = (severity: RiskEventSeverity): fc.Arbitrary<RiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: riskEventTypeArb(),
+    severity: fc.constant(severity),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for RiskEvent with specific event type
+ */
+export const riskEventWithTypeArb = (eventType: RiskEventType): fc.Arbitrary<RiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: fc.constant(eventType),
+    severity: riskEventSeverityArb(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb()
+  });

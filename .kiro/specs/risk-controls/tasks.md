@@ -150,201 +150,201 @@ This plan implements the Risk & Controls feature using TypeScript with AWS Lambd
     - Implement checkAutoTriggers() for rapid loss, error rate conditions
     - _Requirements: 4.3_
 
-- [ ] 8. Implement circuit breaker service
-  - [ ] 8.1 Create circuit breaker repository
+- [x] 8. Implement circuit breaker service
+  - [x] 8.1 Create circuit breaker repository
     - Create `src/repositories/circuit-breaker.ts`
     - Implement CRUD operations for CircuitBreaker
     - _Requirements: 5.1_
-  - [ ] 8.2 Implement circuit breaker rules
+  - [x] 8.2 Implement circuit breaker rules
     - Create `src/services/circuit-breaker.ts`
     - Implement condition evaluation for LOSS_RATE, CONSECUTIVE_FAILURES, PRICE_DEVIATION
     - _Requirements: 5.1, 5.3_
-  - [ ] 8.3 Implement trip and pause logic
+  - [x] 8.3 Implement trip and pause logic
     - Implement tripBreaker(), checkBreakers()
     - Pause trading for affected scope
     - _Requirements: 5.2_
-  - [ ] 8.4 Write property test for circuit breaker rules
+  - [x] 8.4 Write property test for circuit breaker rules
     - **Property 11: Circuit Breaker Rules**
     - **Validates: Requirements 5.1, 5.2, 5.3**
-  - [ ] 8.5 Implement auto-reset
+  - [x] 8.5 Implement auto-reset
     - Implement automatic reset after cooldown period
     - Transition OPEN → HALF_OPEN → CLOSED
     - _Requirements: 5.5_
-  - [ ] 8.6 Write property test for circuit breaker auto-reset
+  - [x] 8.6 Write property test for circuit breaker auto-reset
     - **Property 12: Circuit Breaker Auto-Reset**
     - **Validates: Requirements 5.5**
-  - [ ] 8.7 Implement manual override
+  - [x] 8.7 Implement manual override
     - Implement resetBreaker() with authentication
     - _Requirements: 5.6_
-  - [ ] 8.8 Write property test for circuit breaker manual override
+  - [x] 8.8 Write property test for circuit breaker manual override
     - **Property 13: Circuit Breaker Manual Override**
     - **Validates: Requirements 5.6**
 
-- [ ] 9. Checkpoint - Kill switch and circuit breakers complete
+- [x] 9. Checkpoint - Kill switch and circuit breakers complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Implement pre-trade checker
-  - [ ] 10.1 Create pre-trade checker service
+- [x] 10. Implement pre-trade checker
+  - [x] 10.1 Create pre-trade checker service
     - Create `src/services/pre-trade-checker.ts`
     - Implement validate() orchestrating all checks
     - _Requirements: 6.1_
-  - [ ] 10.2 Implement check completeness
+  - [x] 10.2 Implement check completeness
     - Check position limits, capital, leverage, kill switch, circuit breakers
     - Ensure atomic pass/fail
     - _Requirements: 6.2, 6.5_
-  - [ ] 10.3 Write property test for pre-trade check completeness
+  - [x] 10.3 Write property test for pre-trade check completeness
     - **Property 14: Pre-Trade Check Completeness**
     - **Validates: Requirements 6.1, 6.2, 6.5**
-  - [ ] 10.4 Implement rejection details
+  - [x] 10.4 Implement rejection details
     - Return detailed failure reasons for each failed check
     - _Requirements: 6.3_
-  - [ ] 10.5 Write property test for pre-trade rejection details
+  - [x] 10.5 Write property test for pre-trade rejection details
     - **Property 15: Pre-Trade Rejection Details**
     - **Validates: Requirements 6.3**
-  - [ ] 10.6 Implement pre-trade logging
+  - [x] 10.6 Implement pre-trade logging
     - Log all checks with pass/fail status
     - _Requirements: 6.6_
 
-- [ ] 11. Implement post-trade updater
-  - [ ] 11.1 Create post-trade updater service
+- [x] 11. Implement post-trade updater
+  - [x] 11.1 Create post-trade updater service
     - Create `src/services/post-trade-updater.ts`
     - Implement processExecution()
     - _Requirements: 7.1_
-  - [ ] 11.2 Implement state updates
+  - [x] 11.2 Implement state updates
     - Update positions, P&L, drawdown, exposure
     - Trigger protective actions on threshold breach
     - _Requirements: 7.2, 7.3_
-  - [ ] 11.3 Write property test for post-trade state updates
+  - [x] 11.3 Write property test for post-trade state updates
     - **Property 16: Post-Trade State Updates**
     - **Validates: Requirements 7.1, 7.2, 7.3**
-  - [ ] 11.4 Implement position reconciliation
+  - [x] 11.4 Implement position reconciliation
     - Reconcile with exchange data
     - Use exchange as source of truth on discrepancy
     - _Requirements: 7.4, 7.5_
-  - [ ] 11.5 Write property test for position reconciliation
+  - [x] 11.5 Write property test for position reconciliation
     - **Property 17: Position Reconciliation**
     - **Validates: Requirements 7.5**
 
-- [ ] 12. Implement risk profile service
-  - [ ] 12.1 Create risk profile repository
+- [x] 12. Implement risk profile service
+  - [x] 12.1 Create risk profile repository
     - Create `src/repositories/risk-profile.ts`
     - Implement versioned storage
     - _Requirements: 8.1, 8.6_
-  - [ ] 12.2 Implement profile application
+  - [x] 12.2 Implement profile application
     - Create `src/services/risk-profile.ts`
     - Implement assignToStrategy(), apply all parameters
     - Support inheritance with overrides
     - _Requirements: 8.1, 8.2, 8.3_
-  - [ ] 12.3 Write property test for risk profile application
+  - [x] 12.3 Write property test for risk profile application
     - **Property 18: Risk Profile Application**
     - **Validates: Requirements 8.1, 8.2, 8.3**
-  - [ ] 12.4 Implement profile validation
+  - [x] 12.4 Implement profile validation
     - Validate internal consistency
     - _Requirements: 8.5_
-  - [ ] 12.5 Write property test for risk profile validation
+  - [x] 12.5 Write property test for risk profile validation
     - **Property 19: Risk Profile Validation**
     - **Validates: Requirements 8.5**
-  - [ ] 12.6 Implement profile versioning
+  - [x] 12.6 Implement profile versioning
     - Create new versions on update, maintain history
     - _Requirements: 8.6_
-  - [ ] 12.7 Write property test for risk profile versioning
+  - [x] 12.7 Write property test for risk profile versioning
     - **Property 20: Risk Profile Versioning**
     - **Validates: Requirements 8.6**
 
-- [ ] 13. Checkpoint - Pre-trade, post-trade, and profiles complete
+- [x] 13. Checkpoint - Pre-trade, post-trade, and profiles complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. Implement exchange safeguards
-  - [ ] 14.1 Create exchange limits repository
+- [x] 14. Implement exchange safeguards
+  - [x] 14.1 Create exchange limits repository
     - Create `src/repositories/exchange-limits.ts`
     - Store exchange-specific limits
     - _Requirements: 9.1_
-  - [ ] 14.2 Implement exchange limit enforcement
+  - [x] 14.2 Implement exchange limit enforcement
     - Create `src/services/exchange-safeguard.ts`
     - Implement validateOrder() against exchange limits
     - _Requirements: 9.1, 9.2_
-  - [ ] 14.3 Write property test for exchange limit enforcement
+  - [x] 14.3 Write property test for exchange limit enforcement
     - **Property 21: Exchange Limit Enforcement**
     - **Validates: Requirements 9.1, 9.2**
-  - [ ] 14.4 Implement rate limit tracking
+  - [x] 14.4 Implement rate limit tracking
     - Track API usage, throttle when approaching limits
     - _Requirements: 9.3_
-  - [ ] 14.5 Write property test for exchange rate limit tracking
+  - [x] 14.5 Write property test for exchange rate limit tracking
     - **Property 22: Exchange Rate Limit Tracking**
     - **Validates: Requirements 9.3**
-  - [ ] 14.6 Implement error categorization
+  - [x] 14.6 Implement error categorization
     - Categorize exchange errors, apply appropriate handling
     - _Requirements: 9.6_
-  - [ ] 14.7 Write property test for exchange error categorization
+  - [x] 14.7 Write property test for exchange error categorization
     - **Property 23: Exchange Error Categorization**
     - **Validates: Requirements 9.6**
 
-- [ ] 15. Implement risk event service
-  - [ ] 15.1 Create risk event repository
+- [x] 15. Implement risk event service
+  - [x] 15.1 Create risk event repository
     - Create `src/repositories/risk-event.ts`
     - Implement storage with TTL for retention
     - _Requirements: 10.1, 10.5_
-  - [ ] 15.2 Implement event logging
+  - [x] 15.2 Implement event logging
     - Create `src/services/risk-event.ts`
     - Implement logEvent() with all required fields
     - _Requirements: 10.1, 10.2_
-  - [ ] 15.3 Write property test for risk event logging
+  - [x] 15.3 Write property test for risk event logging
     - **Property 24: Risk Event Logging**
     - **Validates: Requirements 10.1, 10.2**
-  - [ ] 15.4 Implement tenant isolation
+  - [x] 15.4 Implement tenant isolation
     - Filter events by tenantId
     - _Requirements: 10.4_
-  - [ ] 15.5 Write property test for risk event tenant isolation
+  - [x] 15.5 Write property test for risk event tenant isolation
     - **Property 25: Risk Event Tenant Isolation**
     - **Validates: Requirements 10.4**
-  - [ ] 15.6 Implement alerting
+  - [x] 15.6 Implement alerting
     - Configure and send alerts via email, SMS, webhook
     - _Requirements: 10.3_
-  - [ ] 15.7 Implement event aggregation
+  - [x] 15.7 Implement event aggregation
     - Aggregate events for trend analysis
     - _Requirements: 10.6_
 
-- [ ] 16. Checkpoint - Exchange safeguards and events complete
+- [x] 16. Checkpoint - Exchange safeguards and events complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 17. Implement Lambda handlers
-  - [ ] 17.1 Create position limit API handlers
+- [x] 17. Implement Lambda handlers
+  - [x] 17.1 Create position limit API handlers
     - Create `src/handlers/position-limits.ts`
     - Implement CRUD endpoints
     - _Requirements: 1.1_
-  - [ ] 17.2 Create drawdown API handlers
+  - [x] 17.2 Create drawdown API handlers
     - Create `src/handlers/drawdown.ts`
     - Implement GET /drawdown, POST /drawdown/reset, POST /drawdown/resume
     - _Requirements: 2.1, 2.5, 2.6_
-  - [ ] 17.3 Create kill switch API handlers
+  - [x] 17.3 Create kill switch API handlers
     - Create `src/handlers/kill-switch.ts`
     - Implement POST /kill-switch/activate, POST /kill-switch/deactivate
     - _Requirements: 4.1, 4.5_
-  - [ ] 17.4 Create circuit breaker API handlers
+  - [x] 17.4 Create circuit breaker API handlers
     - Create `src/handlers/circuit-breakers.ts`
     - Implement CRUD and reset endpoints
     - _Requirements: 5.1, 5.6_
-  - [ ] 17.5 Create risk profile API handlers
+  - [x] 17.5 Create risk profile API handlers
     - Create `src/handlers/risk-profiles.ts`
     - Implement CRUD and assignment endpoints
     - _Requirements: 8.1, 8.2_
-  - [ ] 17.6 Create risk event API handlers
+  - [x] 17.6 Create risk event API handlers
     - Create `src/handlers/risk-events.ts`
     - Implement GET /risk-events with filters
     - _Requirements: 10.1_
 
-- [ ] 18. Create test generators and integration tests
-  - [ ] 18.1 Create fast-check generators
+- [x] 18. Create test generators and integration tests
+  - [x] 18.1 Create fast-check generators
     - Create `src/test/generators.ts`
     - Implement generators for OrderRequest, ExecutionReport, RiskProfile, PositionLimit, DrawdownState, CircuitBreaker, RiskEvent
     - _Requirements: N/A (testing infrastructure)_
-  - [ ] 18.2 Write integration tests for pre-trade flow
+  - [x] 18.2 Write integration tests for pre-trade flow
     - Test order → pre-trade checks → approve/reject
     - _Requirements: 6.1_
-  - [ ] 18.3 Write integration tests for post-trade flow
+  - [x] 18.3 Write integration tests for post-trade flow
     - Test execution → state updates → threshold checks
     - _Requirements: 7.1_
-  - [ ] 18.4 Write integration tests for kill switch flow
+  - [x] 18.4 Write integration tests for kill switch flow
     - Test activate → block orders → deactivate
     - _Requirements: 4.1, 4.5_
 

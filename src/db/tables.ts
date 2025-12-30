@@ -26,7 +26,16 @@ export const TableNames = {
   VOLATILITY_STATE: process.env.VOLATILITY_STATE_TABLE || 'volatility-state',
   VOLATILITY_CONFIG: process.env.VOLATILITY_CONFIG_TABLE || 'volatility-config',
   KILL_SWITCH_STATE: process.env.KILL_SWITCH_STATE_TABLE || 'kill-switch-state',
-  KILL_SWITCH_CONFIG: process.env.KILL_SWITCH_CONFIG_TABLE || 'kill-switch-config'
+  KILL_SWITCH_CONFIG: process.env.KILL_SWITCH_CONFIG_TABLE || 'kill-switch-config',
+  CIRCUIT_BREAKERS: process.env.CIRCUIT_BREAKERS_TABLE || 'circuit-breakers',
+  CIRCUIT_BREAKER_EVENTS: process.env.CIRCUIT_BREAKER_EVENTS_TABLE || 'circuit-breaker-events',
+  RISK_PROFILES: process.env.RISK_PROFILES_TABLE || 'risk-profiles',
+  STRATEGY_PROFILE_ASSIGNMENTS: process.env.STRATEGY_PROFILE_ASSIGNMENTS_TABLE || 'strategy-profile-assignments',
+  EXCHANGE_LIMITS: process.env.EXCHANGE_LIMITS_TABLE || 'exchange-limits',
+  EXCHANGE_HEALTH: process.env.EXCHANGE_HEALTH_TABLE || 'exchange-health',
+  RATE_LIMIT_STATE: process.env.RATE_LIMIT_STATE_TABLE || 'rate-limit-state',
+  RISK_EVENTS: process.env.RISK_EVENTS_TABLE || 'risk-events',
+  ALERT_CONFIGS: process.env.ALERT_CONFIGS_TABLE || 'alert-configs'
 } as const;
 
 /**
@@ -235,6 +244,91 @@ export const KeySchemas = {
   KILL_SWITCH_CONFIG: {
     partitionKey: 'tenantId',
     sortKey: 'configId'
+  },
+
+  /**
+   * Circuit Breakers Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: breakerId
+   */
+  CIRCUIT_BREAKERS: {
+    partitionKey: 'tenantId',
+    sortKey: 'breakerId'
+  },
+
+  /**
+   * Circuit Breaker Events Table
+   * - Partition Key: tenantId#breakerId (composite for tenant isolation)
+   * - Sort Key: timestamp
+   */
+  CIRCUIT_BREAKER_EVENTS: {
+    partitionKey: 'tenantBreakerId',
+    sortKey: 'timestamp'
+  },
+
+  /**
+   * Risk Profiles Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: profileId#version (composite for versioning)
+   */
+  RISK_PROFILES: {
+    partitionKey: 'tenantId',
+    sortKey: 'profileIdVersion'
+  },
+
+  /**
+   * Strategy Profile Assignments Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: strategyId
+   */
+  STRATEGY_PROFILE_ASSIGNMENTS: {
+    partitionKey: 'tenantId',
+    sortKey: 'strategyId'
+  },
+
+  /**
+   * Exchange Limits Table
+   * - Partition Key: exchangeId
+   * - Sort Key: assetId
+   */
+  EXCHANGE_LIMITS: {
+    partitionKey: 'exchangeId',
+    sortKey: 'assetId'
+  },
+
+  /**
+   * Exchange Health Table
+   * - Partition Key: exchangeId
+   */
+  EXCHANGE_HEALTH: {
+    partitionKey: 'exchangeId'
+  },
+
+  /**
+   * Rate Limit State Table
+   * - Partition Key: exchangeId
+   */
+  RATE_LIMIT_STATE: {
+    partitionKey: 'exchangeId'
+  },
+
+  /**
+   * Risk Events Table
+   * - Partition Key: tenantId (for tenant isolation)
+   * - Sort Key: timestamp#eventId (composite for time-based queries)
+   * - TTL: expiresAt for retention management
+   */
+  RISK_EVENTS: {
+    partitionKey: 'tenantId',
+    sortKey: 'timestampEventId'
+  },
+
+  /**
+   * Alert Configs Table
+   * - Partition Key: tenantId (for tenant isolation)
+   */
+  ALERT_CONFIGS: {
+    partitionKey: 'tenantId'
   }
 } as const;
 
@@ -305,6 +399,39 @@ export const GSINames = {
     ACTIVE_INDEX: 'active-index'
   },
   KILL_SWITCH_CONFIG: {
+    // No additional indexes needed
+  },
+  CIRCUIT_BREAKERS: {
+    SCOPE_INDEX: 'scope-index',
+    STATE_INDEX: 'state-index',
+    SCOPE_ID_INDEX: 'scopeId-index'
+  },
+  CIRCUIT_BREAKER_EVENTS: {
+    BREAKER_INDEX: 'breakerId-index'
+  },
+  RISK_PROFILES: {
+    NAME_INDEX: 'name-index',
+    PROFILE_ID_INDEX: 'profileId-index'
+  },
+  STRATEGY_PROFILE_ASSIGNMENTS: {
+    PROFILE_INDEX: 'profileId-index'
+  },
+  EXCHANGE_LIMITS: {
+    ASSET_INDEX: 'assetId-index'
+  },
+  EXCHANGE_HEALTH: {
+    STATUS_INDEX: 'status-index'
+  },
+  RATE_LIMIT_STATE: {
+    // No additional indexes needed
+  },
+  RISK_EVENTS: {
+    EVENT_TYPE_INDEX: 'eventType-timestamp-index',
+    SEVERITY_INDEX: 'severity-timestamp-index',
+    STRATEGY_INDEX: 'strategyId-timestamp-index',
+    ASSET_INDEX: 'assetId-timestamp-index'
+  },
+  ALERT_CONFIGS: {
     // No additional indexes needed
   }
 } as const;
