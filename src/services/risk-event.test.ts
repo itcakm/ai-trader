@@ -1,7 +1,14 @@
 import * as fc from 'fast-check';
 import { RiskEventService } from './risk-event';
 import { RiskEventRepository } from '../repositories/risk-event';
-import { RiskEvent, RiskEventInput, AlertConfig, AlertChannel } from '../types/risk-event';
+import {
+  RiskEvent,
+  RiskEventInput,
+  AlertConfig,
+  AlertChannel,
+  AuditedRiskEvent,
+  MarketConditionSnapshot
+} from '../types/risk-event';
 import {
   riskEventArb,
   riskEventInputArb,
@@ -10,7 +17,13 @@ import {
   multiTenantRiskEventsArb,
   riskEventSeverityArb,
   riskEventTypeArb,
-  isoDateStringArb
+  isoDateStringArb,
+  auditedRiskEventInputArb,
+  orderSnapshotArb,
+  failedCheckArb,
+  contextLinkedEventArb,
+  marketConditionSnapshotArb,
+  parameterChangeRecordArb
 } from '../test/generators';
 
 // Mock the repository
@@ -603,6 +616,300 @@ describe('RiskEventService', () => {
             // Verify the saved event has the correct tenant ID
             expect(savedEvent).toBeDefined();
             expect(savedEvent?.tenantId).toBe(input.tenantId);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * Property 8: Risk Event Field Completeness
+   * 
+   * For any risk event logged by the Audit_Service, the stored record SHALL contain:
+   * event type, severity, trigger condition, action taken, affected scope, and
+   * (for rejections) full details of all failed checks.
+   * 
+   * **Validates: Requirements 3.2, 3.4**
+   */
+  describe('Property 8: Risk Event Field Completeness', () => {
+    it('audited events contain all required base fields', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          auditedRiskEventInputArb(),
+          async (input) => {
+            let savedEvent: AuditedRiskEvent | undefined;
+            mockRiskEventRepo.putAuditedEvent.mockImplementation(async (event: AuditedRiskEvent) => {
+              savedEvent = event;
+            });
+            mockRiskEventRepo.getAlertConfig.mockResolvedValue(null);
+
+            const result = await RiskEventService.logAuditedEvent(input);
+
+            // Verify all required base fields are present
+            expect(result.eventId).toBeDefined();
+            expect(result.tenantId).toBe(input.tenantId);
+            expect(result.eventType).toBe(input.eventType);
+            expect(result.severity).toBe(input.severity);
+            expect(result.description).toBe(input.description);
+            expect(result.triggerCondition).toBe(input.triggerCondition);
+            expect(result.actionTaken).toBe(input.actionTaken);
+            expect(result.timestamp).toBeDefined();
+
+            // Verify using the service's validation method
+            expect(RiskEventService.validateAuditedEventFields(result)).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('rejection events contain full details of failed checks', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          orderSnapshotArb(),
+          fc.array(failedCheckArb(), { minLength: 1, maxLength: 5 }),
+          async (tenantId, orderSnapshot, failedChecks) => {
+            let savedEvent: AuditedRiskEvent | undefined;
+            mockRiskEventRepo.putAuditedEvent.mockImplementation(async (event: AuditedRiskEvent) => {
+              savedEvent = event;
+            });
+            mockRiskEventRepo.getAlertConfig.mockResolvedValue(null);
+
+            const result = await RiskEventService.logRejection(
+              tenantId,
+              orderSnapshot.orderId,
+              orderSnapshot,
+              failedChecks
+            );
+
+            // Verify rejection details are present
+            expect(result.rejectionDetails).toBeDefined();
+            expect(result.rejectionDetails?.orderId).toBe(orderSnapshot.orderId);
+            expect(result.rejectionDetails?.failedChecks).toHaveLength(failedChecks.length);
+            expect(result.rejectionDetails?.orderSnapshot).toEqual(orderSnapshot);
+
+            // Verify each failed check has required fields
+            for (const check of result.rejectionDetails?.failedChecks || []) {
+              expect(check.checkType).toBeDefined();
+              expect(check.currentValue).toBeDefined();
+              expect(check.limitValue).toBeDefined();
+              expect(check.description).toBeDefined();
+            }
+
+            // Verify using the service's validation method
+            expect(RiskEventService.validateAuditedEventFields(result)).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * Property 9: Risk Event Context Linking
+   * 
+   * For any risk event with a triggering trade or market condition, the stored record
+   * SHALL contain valid references to the triggering context that can be resolved.
+   * 
+   * **Validates: Requirements 3.3**
+   */
+  describe('Property 9: Risk Event Context Linking', () => {
+    it('events with context links have valid references', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          contextLinkedEventArb(),
+          async (event) => {
+            // Verify context links are valid
+            expect(RiskEventService.validateContextLinks(event)).toBe(true);
+
+            // Verify trade ID is a valid UUID
+            if (event.triggeringTradeId) {
+              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+              expect(uuidRegex.test(event.triggeringTradeId)).toBe(true);
+            }
+
+            // Verify market conditions have required fields
+            if (event.triggeringMarketConditions) {
+              expect(event.triggeringMarketConditions.timestamp).toBeDefined();
+              expect(event.triggeringMarketConditions.prices).toBeDefined();
+              expect(event.triggeringMarketConditions.volatility).toBeDefined();
+              expect(event.triggeringMarketConditions.volume24h).toBeDefined();
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('linkToContext stores valid context references', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          fc.uuid(),
+          marketConditionSnapshotArb(),
+          async (eventId, tradeId, marketConditions) => {
+            let storedContext: { tradeId?: string; marketConditions?: MarketConditionSnapshot } | undefined;
+            mockRiskEventRepo.putContextLink.mockImplementation(
+              async (eid: string, tid?: string, mc?: MarketConditionSnapshot) => {
+                storedContext = { tradeId: tid, marketConditions: mc };
+              }
+            );
+
+            await RiskEventService.linkToContext(eventId, tradeId, marketConditions);
+
+            // Verify context was stored
+            expect(storedContext).toBeDefined();
+            expect(storedContext?.tradeId).toBe(tradeId);
+            expect(storedContext?.marketConditions).toEqual(marketConditions);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('events can be retrieved by triggering trade ID', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          fc.uuid(),
+          fc.array(contextLinkedEventArb(), { minLength: 1, maxLength: 5 }),
+          async (tenantId, tradeId, events) => {
+            // Set all events to have the same trade ID
+            const linkedEvents = events.map(e => ({
+              ...e,
+              tenantId,
+              triggeringTradeId: tradeId
+            }));
+
+            mockRiskEventRepo.getEventsByTradeId.mockResolvedValue(linkedEvents);
+
+            const result = await RiskEventService.getEventsByTradeId(tenantId, tradeId);
+
+            // Verify all returned events are linked to the trade
+            expect(result.length).toBe(linkedEvents.length);
+            for (const event of result) {
+              expect(event.triggeringTradeId).toBe(tradeId);
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * Property 10: Parameter Change Audit Trail
+   * 
+   * For any risk parameter change, the audit record SHALL contain: parameter name,
+   * previous value, new value, user who made the change, and timestamp.
+   * 
+   * **Validates: Requirements 3.5**
+   */
+  describe('Property 10: Parameter Change Audit Trail', () => {
+    it('parameter change events contain all required fields', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          parameterChangeRecordArb(),
+          async (tenantId, changeRecord) => {
+            let savedEvent: AuditedRiskEvent | undefined;
+            mockRiskEventRepo.putAuditedEvent.mockImplementation(async (event: AuditedRiskEvent) => {
+              savedEvent = event;
+            });
+            mockRiskEventRepo.getAlertConfig.mockResolvedValue(null);
+
+            const result = await RiskEventService.logParameterChange(
+              tenantId,
+              changeRecord.parameterName,
+              changeRecord.previousValue,
+              changeRecord.newValue,
+              changeRecord.changedBy,
+              changeRecord.changeReason
+            );
+
+            // Verify parameter change record is present
+            expect(result.parameterChange).toBeDefined();
+            expect(result.parameterChange?.parameterName).toBe(changeRecord.parameterName);
+            expect(result.parameterChange?.previousValue).toEqual(changeRecord.previousValue);
+            expect(result.parameterChange?.newValue).toEqual(changeRecord.newValue);
+            expect(result.parameterChange?.changedBy).toBe(changeRecord.changedBy);
+            expect(result.timestamp).toBeDefined();
+
+            // Verify using the service's validation method
+            expect(RiskEventService.validateParameterChange(result.parameterChange!)).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('parameter change history can be retrieved', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          fc.array(parameterChangeRecordArb(), { minLength: 1, maxLength: 10 }),
+          async (tenantId, changes) => {
+            mockRiskEventRepo.getParameterChanges.mockResolvedValue(changes);
+
+            const result = await RiskEventService.getParameterChangeHistory(tenantId);
+
+            // Verify all changes are returned
+            expect(result.length).toBe(changes.length);
+            for (const change of result) {
+              expect(RiskEventService.validateParameterChange(change)).toBe(true);
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('parameter change history can be filtered by parameter name', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          fc.constantFrom('maxPositionSize', 'maxDailyLoss', 'maxDrawdown'),
+          fc.array(parameterChangeRecordArb(), { minLength: 1, maxLength: 10 }),
+          async (tenantId, parameterName, allChanges) => {
+            const filteredChanges = allChanges.filter(c => c.parameterName === parameterName);
+            mockRiskEventRepo.getParameterChanges.mockResolvedValue(filteredChanges);
+
+            const result = await RiskEventService.getParameterChangeHistory(tenantId, parameterName);
+
+            // Verify only matching changes are returned
+            for (const change of result) {
+              expect(change.parameterName).toBe(parameterName);
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('parameter change validation rejects incomplete records', () => {
+      fc.assert(
+        fc.property(
+          fc.uuid(),
+          (changedBy) => {
+            // Missing parameterName
+            const incompleteChange1 = {
+              parameterName: '',
+              previousValue: 100,
+              newValue: 200,
+              changedBy
+            };
+            expect(RiskEventService.validateParameterChange(incompleteChange1)).toBe(false);
+
+            // Missing changedBy
+            const incompleteChange2 = {
+              parameterName: 'maxPositionSize',
+              previousValue: 100,
+              newValue: 200,
+              changedBy: ''
+            };
+            expect(RiskEventService.validateParameterChange(incompleteChange2)).toBe(false);
           }
         ),
         { numRuns: 100 }

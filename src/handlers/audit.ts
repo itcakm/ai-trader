@@ -1,7 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { AuditService, TenantAccessDeniedError, AuditRecordNotFoundError } from '../services/audit';
+import { AuditQueryService } from '../services/audit-query';
 import { ValidationError } from '../types/validation';
 import { AuditFilters, DateRange } from '../types/audit';
+import { AuditQueryFilters, AggregationOptions, AggregationGroupBy, AggregationMetric } from '../types/audit-query';
 
 /**
  * Error response body structure
@@ -422,6 +424,222 @@ export async function getAuditRecordsByType(
   }
 }
 
+const VALID_GROUP_BY: AggregationGroupBy[] = ['DAY', 'HOUR', 'EVENT_TYPE', 'STRATEGY', 'ASSET'];
+const VALID_METRICS: AggregationMetric[] = ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'];
+
+/**
+ * POST /audit/query
+ * 
+ * Query audit records with advanced filters and pagination.
+ * 
+ * Requirements: 7.1
+ */
+export async function queryAuditRecords(
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> {
+  try {
+    const tenantId = getTenantId(event);
+    if (!tenantId) {
+      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
+    }
+
+    const body = parseBody<{
+      filters: AuditQueryFilters;
+      pageSize?: number;
+      pageToken?: string;
+    }>(event);
+
+    if (!body) {
+      return errorResponse(400, 'Invalid request body', 'INVALID_BODY');
+    }
+
+    const validationErrors: ValidationError[] = [];
+
+    // Validate filters
+    if (!body.filters) {
+      validationErrors.push({ field: 'filters', code: 'REQUIRED', message: 'filters is required' });
+    } else {
+      if (!body.filters.timeRange) {
+        validationErrors.push({ field: 'filters.timeRange', code: 'REQUIRED', message: 'filters.timeRange is required' });
+      } else {
+        if (!body.filters.timeRange.startDate || !isValidISODate(body.filters.timeRange.startDate)) {
+          validationErrors.push({ field: 'filters.timeRange.startDate', code: 'INVALID', message: 'startDate must be a valid ISO date' });
+        }
+        if (!body.filters.timeRange.endDate || !isValidISODate(body.filters.timeRange.endDate)) {
+          validationErrors.push({ field: 'filters.timeRange.endDate', code: 'INVALID', message: 'endDate must be a valid ISO date' });
+        }
+      }
+    }
+
+    // Validate pageSize
+    if (body.pageSize !== undefined) {
+      if (typeof body.pageSize !== 'number' || body.pageSize < 1 || body.pageSize > 1000) {
+        validationErrors.push({ field: 'pageSize', code: 'INVALID', message: 'pageSize must be between 1 and 1000' });
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return errorResponse(400, 'Validation failed', 'VALIDATION_FAILED', validationErrors);
+    }
+
+    const result = await AuditQueryService.query(
+      tenantId,
+      body.filters,
+      body.pageSize,
+      body.pageToken
+    );
+
+    return successResponse(result);
+  } catch (error) {
+    console.error('Error querying audit records:', error);
+    return errorResponse(500, 'Internal server error', 'INTERNAL_ERROR');
+  }
+}
+
+/**
+ * POST /audit/aggregate
+ * 
+ * Aggregate audit data for trend analysis.
+ * 
+ * Requirements: 7.3
+ */
+export async function aggregateAuditRecords(
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> {
+  try {
+    const tenantId = getTenantId(event);
+    if (!tenantId) {
+      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
+    }
+
+    const body = parseBody<{
+      filters: AuditQueryFilters;
+      options: AggregationOptions;
+    }>(event);
+
+    if (!body) {
+      return errorResponse(400, 'Invalid request body', 'INVALID_BODY');
+    }
+
+    const validationErrors: ValidationError[] = [];
+
+    // Validate filters
+    if (!body.filters) {
+      validationErrors.push({ field: 'filters', code: 'REQUIRED', message: 'filters is required' });
+    } else {
+      if (!body.filters.timeRange) {
+        validationErrors.push({ field: 'filters.timeRange', code: 'REQUIRED', message: 'filters.timeRange is required' });
+      } else {
+        if (!body.filters.timeRange.startDate || !isValidISODate(body.filters.timeRange.startDate)) {
+          validationErrors.push({ field: 'filters.timeRange.startDate', code: 'INVALID', message: 'startDate must be a valid ISO date' });
+        }
+        if (!body.filters.timeRange.endDate || !isValidISODate(body.filters.timeRange.endDate)) {
+          validationErrors.push({ field: 'filters.timeRange.endDate', code: 'INVALID', message: 'endDate must be a valid ISO date' });
+        }
+      }
+    }
+
+    // Validate aggregation options
+    if (!body.options) {
+      validationErrors.push({ field: 'options', code: 'REQUIRED', message: 'options is required' });
+    } else {
+      if (!body.options.groupBy || !VALID_GROUP_BY.includes(body.options.groupBy)) {
+        validationErrors.push({ 
+          field: 'options.groupBy', 
+          code: 'INVALID', 
+          message: `groupBy must be one of: ${VALID_GROUP_BY.join(', ')}` 
+        });
+      }
+      if (!Array.isArray(body.options.metrics) || body.options.metrics.length === 0) {
+        validationErrors.push({ field: 'options.metrics', code: 'REQUIRED', message: 'metrics must be a non-empty array' });
+      } else {
+        const invalidMetrics = body.options.metrics.filter(m => !VALID_METRICS.includes(m));
+        if (invalidMetrics.length > 0) {
+          validationErrors.push({ 
+            field: 'options.metrics', 
+            code: 'INVALID', 
+            message: `Invalid metrics: ${invalidMetrics.join(', ')}. Valid: ${VALID_METRICS.join(', ')}` 
+          });
+        }
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return errorResponse(400, 'Validation failed', 'VALIDATION_FAILED', validationErrors);
+    }
+
+    const result = await AuditQueryService.aggregate(
+      tenantId,
+      body.filters,
+      body.options
+    );
+
+    return successResponse(result);
+  } catch (error) {
+    console.error('Error aggregating audit records:', error);
+    return errorResponse(500, 'Internal server error', 'INTERNAL_ERROR');
+  }
+}
+
+/**
+ * POST /audit/search
+ * 
+ * Full-text search in audit records.
+ * 
+ * Requirements: 7.5
+ */
+export async function searchAuditRecords(
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> {
+  try {
+    const tenantId = getTenantId(event);
+    if (!tenantId) {
+      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
+    }
+
+    const body = parseBody<{
+      searchText: string;
+      filters?: AuditQueryFilters;
+    }>(event);
+
+    if (!body) {
+      return errorResponse(400, 'Invalid request body', 'INVALID_BODY');
+    }
+
+    const validationErrors: ValidationError[] = [];
+
+    // Validate search text
+    if (!body.searchText || body.searchText.trim() === '') {
+      validationErrors.push({ field: 'searchText', code: 'REQUIRED', message: 'searchText is required' });
+    }
+
+    // Validate filters if provided
+    if (body.filters?.timeRange) {
+      if (body.filters.timeRange.startDate && !isValidISODate(body.filters.timeRange.startDate)) {
+        validationErrors.push({ field: 'filters.timeRange.startDate', code: 'INVALID', message: 'startDate must be a valid ISO date' });
+      }
+      if (body.filters.timeRange.endDate && !isValidISODate(body.filters.timeRange.endDate)) {
+        validationErrors.push({ field: 'filters.timeRange.endDate', code: 'INVALID', message: 'endDate must be a valid ISO date' });
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return errorResponse(400, 'Validation failed', 'VALIDATION_FAILED', validationErrors);
+    }
+
+    const result = await AuditQueryService.search(
+      tenantId,
+      body.searchText,
+      body.filters
+    );
+
+    return successResponse(result);
+  } catch (error) {
+    console.error('Error searching audit records:', error);
+    return errorResponse(500, 'Internal server error', 'INTERNAL_ERROR');
+  }
+}
+
 /**
  * Main handler that routes requests based on HTTP method and path
  */
@@ -443,6 +661,21 @@ export async function handler(
   // Route: POST /audit/export
   if (method === 'POST' && path === '/audit/export') {
     return exportAuditRecords(event);
+  }
+
+  // Route: POST /audit/query (Requirements: 7.1)
+  if (method === 'POST' && path === '/audit/query') {
+    return queryAuditRecords(event);
+  }
+
+  // Route: POST /audit/aggregate (Requirements: 7.3)
+  if (method === 'POST' && path === '/audit/aggregate') {
+    return aggregateAuditRecords(event);
+  }
+
+  // Route: POST /audit/search (Requirements: 7.5)
+  if (method === 'POST' && path === '/audit/search') {
+    return searchAuditRecords(event);
   }
 
   // Route: GET /audit/count

@@ -7,8 +7,15 @@ import {
   RiskEventType,
   RiskEventSeverity,
   AlertConfig,
-  AlertChannel
+  AlertChannel,
+  AuditedRiskEvent,
+  AuditedRiskEventInput,
+  RejectionDetails,
+  ParameterChangeRecord,
+  MarketConditionSnapshot,
+  FailedCheck
 } from '../types/risk-event';
+import { OrderSnapshot } from '../types/trade-lifecycle';
 import { RiskEventRepository } from '../repositories/risk-event';
 
 /**
@@ -537,5 +544,318 @@ export const RiskEventService = {
       actionTaken: 'Error logged, appropriate handling applied',
       metadata: { exchangeId, errorType, errorMessage }
     });
+  },
+
+  // ==================== Audit Operations ====================
+
+  /**
+   * Log an audited risk event with extended audit fields
+   * 
+   * Requirements: 3.2, 3.3, 3.4, 3.5
+   * 
+   * @param input - The audited risk event input
+   * @returns The created audited risk event
+   */
+  async logAuditedEvent(input: AuditedRiskEventInput): Promise<AuditedRiskEvent> {
+    const eventId = generateUUID();
+    const timestamp = new Date().toISOString();
+
+    const event: AuditedRiskEvent = {
+      eventId,
+      tenantId: input.tenantId,
+      eventType: input.eventType,
+      severity: input.severity,
+      strategyId: input.strategyId,
+      assetId: input.assetId,
+      description: input.description,
+      triggerCondition: input.triggerCondition,
+      actionTaken: input.actionTaken,
+      metadata: input.metadata || {},
+      timestamp,
+      triggeringTradeId: input.triggeringTradeId,
+      triggeringMarketConditions: input.triggeringMarketConditions,
+      rejectionDetails: input.rejectionDetails,
+      parameterChange: input.parameterChange
+    };
+
+    // Store the audited event
+    await RiskEventRepository.putAuditedEvent(event);
+
+    // Check if we need to send alerts
+    await this.checkAndSendAlerts(event);
+
+    return event;
+  },
+
+  /**
+   * Log a rejection event with full details of failed checks
+   * 
+   * Requirements: 3.4
+   * 
+   * @param tenantId - The tenant identifier
+   * @param orderId - The rejected order ID
+   * @param orderSnapshot - The complete order state at rejection
+   * @param failedChecks - Array of failed risk checks
+   * @param strategyId - Optional strategy ID
+   * @param assetId - Optional asset ID
+   * @param triggeringTradeId - Optional triggering trade ID
+   * @param marketConditions - Optional market conditions at time of rejection
+   * @returns The created audited risk event
+   */
+  async logRejection(
+    tenantId: string,
+    orderId: string,
+    orderSnapshot: OrderSnapshot,
+    failedChecks: FailedCheck[],
+    strategyId?: string,
+    assetId?: string,
+    triggeringTradeId?: string,
+    marketConditions?: MarketConditionSnapshot
+  ): Promise<AuditedRiskEvent> {
+    const rejectionDetails: RejectionDetails = {
+      orderId,
+      failedChecks,
+      orderSnapshot
+    };
+
+    const failedCheckDescriptions = failedChecks.map(c => c.checkType).join(', ');
+
+    return this.logAuditedEvent({
+      tenantId,
+      eventType: 'ORDER_REJECTED',
+      severity: 'WARNING',
+      strategyId,
+      assetId,
+      description: `Order ${orderId} rejected: ${failedCheckDescriptions}`,
+      triggerCondition: `Failed checks: ${failedChecks.length}`,
+      actionTaken: 'Order not submitted',
+      metadata: { orderId, failedCheckCount: failedChecks.length },
+      rejectionDetails,
+      triggeringTradeId,
+      triggeringMarketConditions: marketConditions
+    });
+  },
+
+  /**
+   * Log a parameter change event with before/after values
+   * 
+   * Requirements: 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param parameterName - The name of the changed parameter
+   * @param previousValue - The previous value
+   * @param newValue - The new value
+   * @param changedBy - The user who made the change
+   * @param changeReason - Optional reason for the change
+   * @param strategyId - Optional strategy ID
+   * @returns The created audited risk event
+   */
+  async logParameterChange(
+    tenantId: string,
+    parameterName: string,
+    previousValue: unknown,
+    newValue: unknown,
+    changedBy: string,
+    changeReason?: string,
+    strategyId?: string
+  ): Promise<AuditedRiskEvent> {
+    const parameterChange: ParameterChangeRecord = {
+      parameterName,
+      previousValue,
+      newValue,
+      changedBy,
+      changeReason
+    };
+
+    return this.logAuditedEvent({
+      tenantId,
+      eventType: 'LIMIT_WARNING', // Using LIMIT_WARNING for parameter changes
+      severity: 'INFO',
+      strategyId,
+      description: `Risk parameter '${parameterName}' changed from ${JSON.stringify(previousValue)} to ${JSON.stringify(newValue)}`,
+      triggerCondition: `Parameter change by ${changedBy}`,
+      actionTaken: 'Parameter updated',
+      metadata: { parameterName, previousValue, newValue, changedBy, changeReason },
+      parameterChange
+    });
+  },
+
+  /**
+   * Link a risk event to its triggering context
+   * 
+   * Requirements: 3.3
+   * 
+   * @param eventId - The event identifier
+   * @param tradeId - Optional triggering trade ID
+   * @param marketConditions - Optional market conditions snapshot
+   */
+  async linkToContext(
+    eventId: string,
+    tradeId?: string,
+    marketConditions?: MarketConditionSnapshot
+  ): Promise<void> {
+    await RiskEventRepository.putContextLink(eventId, tradeId, marketConditions);
+  },
+
+  /**
+   * Get an audited risk event by ID
+   * 
+   * Requirements: 3.2, 3.3, 3.4, 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param timestamp - The event timestamp
+   * @param eventId - The event identifier
+   * @returns The audited risk event, or null if not found
+   */
+  async getAuditedEvent(tenantId: string, timestamp: string, eventId: string): Promise<AuditedRiskEvent | null> {
+    return RiskEventRepository.getAuditedEvent(tenantId, timestamp, eventId);
+  },
+
+  /**
+   * Get audited risk events for a tenant with optional filters
+   * 
+   * Requirements: 3.2, 3.3, 3.4, 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param filters - Optional filters
+   * @returns Array of audited risk events
+   */
+  async getAuditedEvents(tenantId: string, filters: RiskEventFilters): Promise<AuditedRiskEvent[]> {
+    const result = await RiskEventRepository.listAuditedEvents(tenantId, filters);
+    return result.items;
+  },
+
+  /**
+   * Get risk events linked to a specific trade
+   * 
+   * Requirements: 3.3
+   * 
+   * @param tenantId - The tenant identifier
+   * @param tradeId - The triggering trade ID
+   * @returns Array of audited risk events linked to the trade
+   */
+  async getEventsByTradeId(tenantId: string, tradeId: string): Promise<AuditedRiskEvent[]> {
+    return RiskEventRepository.getEventsByTradeId(tenantId, tradeId);
+  },
+
+  /**
+   * Get parameter change history for a tenant
+   * 
+   * Requirements: 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param parameterName - Optional filter by parameter name
+   * @returns Array of parameter change records
+   */
+  async getParameterChangeHistory(tenantId: string, parameterName?: string): Promise<ParameterChangeRecord[]> {
+    return RiskEventRepository.getParameterChanges(tenantId, parameterName);
+  },
+
+  /**
+   * Serialize an audited risk event to JSON
+   * 
+   * Requirements: 3.2
+   * 
+   * @param event - The audited risk event
+   * @returns JSON string
+   */
+  serializeAuditedEvent(event: AuditedRiskEvent): string {
+    return JSON.stringify(event);
+  },
+
+  /**
+   * Deserialize an audited risk event from JSON
+   * 
+   * Requirements: 3.2
+   * 
+   * @param json - The JSON string
+   * @returns The audited risk event
+   */
+  deserializeAuditedEvent(json: string): AuditedRiskEvent {
+    return JSON.parse(json) as AuditedRiskEvent;
+  },
+
+  /**
+   * Validate that an audited event has all required fields
+   * 
+   * Requirements: 3.2
+   * 
+   * @param event - The audited risk event
+   * @returns True if all required fields are present
+   */
+  validateAuditedEventFields(event: AuditedRiskEvent): boolean {
+    // Check base required fields
+    const hasBaseFields = !!(
+      event.eventId &&
+      event.tenantId &&
+      event.eventType &&
+      event.severity &&
+      event.description &&
+      event.triggerCondition &&
+      event.actionTaken &&
+      event.timestamp
+    );
+
+    // If it's a rejection event, check rejection details
+    if (event.eventType === 'ORDER_REJECTED' && event.rejectionDetails) {
+      const hasRejectionFields = !!(
+        event.rejectionDetails.orderId &&
+        event.rejectionDetails.failedChecks &&
+        event.rejectionDetails.orderSnapshot
+      );
+      return hasBaseFields && hasRejectionFields;
+    }
+
+    return hasBaseFields;
+  },
+
+  /**
+   * Validate that context links can be resolved
+   * 
+   * Requirements: 3.3
+   * 
+   * @param event - The audited risk event
+   * @returns True if context links are valid (or not present)
+   */
+  validateContextLinks(event: AuditedRiskEvent): boolean {
+    // If no context links, validation passes
+    if (!event.triggeringTradeId && !event.triggeringMarketConditions) {
+      return true;
+    }
+
+    // If trade ID is present, it should be a valid UUID format
+    if (event.triggeringTradeId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(event.triggeringTradeId)) {
+        return false;
+      }
+    }
+
+    // If market conditions are present, they should have required fields
+    if (event.triggeringMarketConditions) {
+      const mc = event.triggeringMarketConditions;
+      if (!mc.timestamp || !mc.prices || !mc.volatility || !mc.volume24h) {
+        return false;
+      }
+    }
+
+    return true;
+  },
+
+  /**
+   * Validate parameter change record has all required fields
+   * 
+   * Requirements: 3.5
+   * 
+   * @param change - The parameter change record
+   * @returns True if all required fields are present
+   */
+  validateParameterChange(change: ParameterChangeRecord): boolean {
+    return !!(
+      change.parameterName &&
+      change.previousValue !== undefined &&
+      change.newValue !== undefined &&
+      change.changedBy
+    );
   }
 };

@@ -6,7 +6,11 @@ import {
   RiskEventStats,
   RiskEventType,
   RiskEventSeverity,
-  AlertConfig
+  AlertConfig,
+  AuditedRiskEvent,
+  RejectionDetails,
+  ParameterChangeRecord,
+  MarketConditionSnapshot
 } from '../types/risk-event';
 import {
   TenantAccessDeniedError,
@@ -25,6 +29,30 @@ const DEFAULT_RETENTION_DAYS = 365;
  * Used for fast aggregation queries
  */
 const recentEventsCache = new Map<string, { events: RiskEvent[]; expiresAt: number }>();
+
+/**
+ * In-memory cache for audited events (simulates ElastiCache)
+ * Used for audit trail queries
+ */
+const auditedEventsCache = new Map<string, { events: AuditedRiskEvent[]; expiresAt: number }>();
+
+/**
+ * In-memory storage for rejection details (simulates S3/DynamoDB)
+ * Requirements: 3.4
+ */
+const rejectionDetailsStore = new Map<string, RejectionDetails>();
+
+/**
+ * In-memory storage for parameter changes (simulates S3/DynamoDB)
+ * Requirements: 3.5
+ */
+const parameterChangesStore = new Map<string, ParameterChangeRecord[]>();
+
+/**
+ * In-memory storage for context links (simulates S3/DynamoDB)
+ * Requirements: 3.3
+ */
+const contextLinksStore = new Map<string, { tradeId?: string; marketConditions?: MarketConditionSnapshot }>();
 
 /**
  * Cache TTL in milliseconds (5 minutes for event cache)
@@ -482,5 +510,258 @@ export const RiskEventRepository = {
    */
   clearAllCaches(): void {
     recentEventsCache.clear();
+    auditedEventsCache.clear();
+    rejectionDetailsStore.clear();
+    parameterChangesStore.clear();
+    contextLinksStore.clear();
+  },
+
+  // ==================== Audit Operations ====================
+
+  /**
+   * Store an audited risk event with extended audit fields
+   * 
+   * Requirements: 3.2, 3.3, 3.4, 3.5
+   * 
+   * @param event - The audited risk event to store
+   * @param retentionDays - Optional retention period (default 1 year)
+   */
+  async putAuditedEvent(event: AuditedRiskEvent, retentionDays?: number): Promise<void> {
+    // Store the base event
+    await this.putEvent(event, retentionDays);
+
+    // Store rejection details if present (Requirements: 3.4)
+    if (event.rejectionDetails) {
+      rejectionDetailsStore.set(event.eventId, event.rejectionDetails);
+    }
+
+    // Store parameter change if present (Requirements: 3.5)
+    if (event.parameterChange) {
+      const existingChanges = parameterChangesStore.get(event.tenantId) || [];
+      existingChanges.push(event.parameterChange);
+      parameterChangesStore.set(event.tenantId, existingChanges);
+    }
+
+    // Store context links if present (Requirements: 3.3)
+    if (event.triggeringTradeId || event.triggeringMarketConditions) {
+      contextLinksStore.set(event.eventId, {
+        tradeId: event.triggeringTradeId,
+        marketConditions: event.triggeringMarketConditions
+      });
+    }
+
+    // Add to audited events cache
+    this.addToAuditedCache(event);
+  },
+
+  /**
+   * Get an audited risk event by ID with all audit fields
+   * 
+   * Requirements: 3.2, 3.3, 3.4, 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param timestamp - The event timestamp
+   * @param eventId - The event identifier
+   * @returns The audited risk event, or null if not found
+   */
+  async getAuditedEvent(tenantId: string, timestamp: string, eventId: string): Promise<AuditedRiskEvent | null> {
+    const baseEvent = await this.getEvent(tenantId, timestamp, eventId);
+    if (!baseEvent) {
+      return null;
+    }
+
+    // Retrieve audit fields
+    const rejectionDetails = rejectionDetailsStore.get(eventId);
+    const contextLink = contextLinksStore.get(eventId);
+
+    const auditedEvent: AuditedRiskEvent = {
+      ...baseEvent,
+      rejectionDetails,
+      triggeringTradeId: contextLink?.tradeId,
+      triggeringMarketConditions: contextLink?.marketConditions
+    };
+
+    return auditedEvent;
+  },
+
+  /**
+   * Store rejection details for a risk event
+   * 
+   * Requirements: 3.4
+   * 
+   * @param eventId - The event identifier
+   * @param details - The rejection details
+   */
+  async putRejectionDetails(eventId: string, details: RejectionDetails): Promise<void> {
+    rejectionDetailsStore.set(eventId, details);
+  },
+
+  /**
+   * Get rejection details for a risk event
+   * 
+   * Requirements: 3.4
+   * 
+   * @param eventId - The event identifier
+   * @returns The rejection details, or null if not found
+   */
+  async getRejectionDetails(eventId: string): Promise<RejectionDetails | null> {
+    return rejectionDetailsStore.get(eventId) || null;
+  },
+
+  /**
+   * Store a parameter change record
+   * 
+   * Requirements: 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param eventId - The associated event identifier
+   * @param change - The parameter change record
+   */
+  async putParameterChange(tenantId: string, eventId: string, change: ParameterChangeRecord): Promise<void> {
+    const existingChanges = parameterChangesStore.get(tenantId) || [];
+    existingChanges.push({ ...change, eventId } as ParameterChangeRecord & { eventId: string });
+    parameterChangesStore.set(tenantId, existingChanges);
+  },
+
+  /**
+   * Get parameter change history for a tenant
+   * 
+   * Requirements: 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param parameterName - Optional filter by parameter name
+   * @returns Array of parameter change records
+   */
+  async getParameterChanges(tenantId: string, parameterName?: string): Promise<ParameterChangeRecord[]> {
+    const changes = parameterChangesStore.get(tenantId) || [];
+    if (parameterName) {
+      return changes.filter(c => c.parameterName === parameterName);
+    }
+    return changes;
+  },
+
+  /**
+   * Link a risk event to its triggering context
+   * 
+   * Requirements: 3.3
+   * 
+   * @param eventId - The event identifier
+   * @param tradeId - Optional triggering trade ID
+   * @param marketConditions - Optional market conditions snapshot
+   */
+  async putContextLink(
+    eventId: string,
+    tradeId?: string,
+    marketConditions?: MarketConditionSnapshot
+  ): Promise<void> {
+    contextLinksStore.set(eventId, { tradeId, marketConditions });
+  },
+
+  /**
+   * Get context link for a risk event
+   * 
+   * Requirements: 3.3
+   * 
+   * @param eventId - The event identifier
+   * @returns The context link, or null if not found
+   */
+  async getContextLink(eventId: string): Promise<{ tradeId?: string; marketConditions?: MarketConditionSnapshot } | null> {
+    return contextLinksStore.get(eventId) || null;
+  },
+
+  /**
+   * List audited events for a tenant with optional filters
+   * 
+   * Requirements: 3.2, 3.3, 3.4, 3.5
+   * 
+   * @param tenantId - The tenant identifier
+   * @param filters - Optional filters for the query
+   * @returns Paginated list of audited risk events
+   */
+  async listAuditedEvents(tenantId: string, filters?: RiskEventFilters): Promise<PaginatedResult<AuditedRiskEvent>> {
+    const baseResult = await this.listEvents(tenantId, filters);
+    
+    // Enrich each event with audit fields
+    const auditedEvents: AuditedRiskEvent[] = baseResult.items.map(event => {
+      const rejectionDetails = rejectionDetailsStore.get(event.eventId);
+      const contextLink = contextLinksStore.get(event.eventId);
+      
+      return {
+        ...event,
+        rejectionDetails,
+        triggeringTradeId: contextLink?.tradeId,
+        triggeringMarketConditions: contextLink?.marketConditions
+      };
+    });
+
+    return {
+      items: auditedEvents,
+      lastEvaluatedKey: baseResult.lastEvaluatedKey
+    };
+  },
+
+  /**
+   * Get events by triggering trade ID
+   * 
+   * Requirements: 3.3
+   * 
+   * @param tenantId - The tenant identifier
+   * @param tradeId - The triggering trade ID
+   * @returns Array of audited risk events linked to the trade
+   */
+  async getEventsByTradeId(tenantId: string, tradeId: string): Promise<AuditedRiskEvent[]> {
+    const result = await this.listAuditedEvents(tenantId, { limit: 10000 });
+    return result.items.filter(event => event.triggeringTradeId === tradeId);
+  },
+
+  // ==================== Audited Events Cache Operations ====================
+
+  /**
+   * Get cache key for tenant audited events
+   */
+  getAuditedCacheKey(tenantId: string): string {
+    return `risk:audited:${tenantId}`;
+  },
+
+  /**
+   * Get audited events from cache
+   */
+  getFromAuditedCache(tenantId: string): AuditedRiskEvent[] | null {
+    const key = this.getAuditedCacheKey(tenantId);
+    const cached = auditedEventsCache.get(key);
+    
+    if (!cached) {
+      return null;
+    }
+
+    // Check expiration
+    if (Date.now() > cached.expiresAt) {
+      auditedEventsCache.delete(key);
+      return null;
+    }
+
+    return cached.events;
+  },
+
+  /**
+   * Add audited event to cache
+   */
+  addToAuditedCache(event: AuditedRiskEvent): void {
+    const key = this.getAuditedCacheKey(event.tenantId);
+    let cached = auditedEventsCache.get(key);
+    
+    if (!cached || Date.now() > cached.expiresAt) {
+      cached = { events: [], expiresAt: Date.now() + CACHE_TTL_MS };
+    }
+
+    cached.events.push(event);
+    
+    // Keep only most recent events
+    if (cached.events.length > MAX_CACHED_EVENTS) {
+      cached.events = cached.events.slice(-MAX_CACHED_EVENTS);
+    }
+
+    cached.expiresAt = Date.now() + CACHE_TTL_MS;
+    auditedEventsCache.set(key, cached);
   }
 };

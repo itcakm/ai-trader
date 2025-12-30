@@ -4853,3 +4853,2044 @@ export const riskEventWithTypeArb = (eventType: RiskEventType): fc.Arbitrary<Ris
     metadata: riskEventMetadataArb(),
     timestamp: isoDateStringArb()
   });
+
+
+/**
+ * Trade Lifecycle Generators
+ * Requirements: 1.1, 1.2, 1.3, 1.5, 1.6
+ */
+
+import {
+  TradeEvent,
+  TradeEventInput,
+  TradeEventType,
+  OrderSnapshot,
+  TriggerCondition
+} from '../types/trade-lifecycle';
+
+/**
+ * Generator for TradeEventType
+ */
+export const tradeEventTypeArb = (): fc.Arbitrary<TradeEventType> =>
+  fc.constantFrom(
+    'SIGNAL_GENERATED',
+    'ORDER_CREATED',
+    'ORDER_SUBMITTED',
+    'ORDER_ACKNOWLEDGED',
+    'PARTIAL_FILL',
+    'COMPLETE_FILL',
+    'ORDER_CANCELLED',
+    'ORDER_REJECTED',
+    'ORDER_EXPIRED'
+  );
+
+/**
+ * Generator for trade lifecycle order side
+ */
+export const tradeOrderSideArb = (): fc.Arbitrary<'BUY' | 'SELL'> =>
+  fc.constantFrom('BUY', 'SELL');
+
+/**
+ * Generator for trade lifecycle order type
+ */
+export const tradeOrderTypeArb = (): fc.Arbitrary<'MARKET' | 'LIMIT' | 'STOP' | 'STOP_LIMIT'> =>
+  fc.constantFrom('MARKET', 'LIMIT', 'STOP', 'STOP_LIMIT');
+
+/**
+ * Generator for order status
+ */
+export const tradeOrderStatusArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom('NEW', 'PENDING', 'OPEN', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'EXPIRED');
+
+/**
+ * Generator for OrderSnapshot
+ * Requirements: 1.5
+ */
+export const orderSnapshotArb = (): fc.Arbitrary<OrderSnapshot> =>
+  fc.record({
+    orderId: fc.uuid(),
+    symbol: cryptoSymbolArb(),
+    side: tradeOrderSideArb(),
+    orderType: tradeOrderTypeArb(),
+    quantity: fc.double({ min: 0.001, max: 1000, noNaN: true }),
+    filledQuantity: fc.double({ min: 0, max: 1000, noNaN: true }),
+    price: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+    stopPrice: fc.option(fc.double({ min: 0.01, max: 100000, noNaN: true }), { nil: undefined }),
+    status: tradeOrderStatusArb(),
+    exchangeOrderId: fc.option(fc.uuid(), { nil: undefined }),
+    parameters: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+      { minKeys: 0, maxKeys: 5 }
+    )
+  }).filter(snapshot => snapshot.filledQuantity <= snapshot.quantity);
+
+/**
+ * Generator for TriggerCondition
+ * Requirements: 1.2
+ */
+export const triggerConditionArb = (): fc.Arbitrary<TriggerCondition> =>
+  fc.record({
+    type: fc.constantFrom('PRICE_THRESHOLD', 'SIGNAL', 'TIME_BASED', 'MANUAL', 'RISK_LIMIT'),
+    description: fc.string({ minLength: 5, maxLength: 100 }),
+    value: fc.oneof(fc.double({ noNaN: true }), fc.string(), fc.boolean()),
+    threshold: fc.option(fc.oneof(fc.double({ noNaN: true }), fc.string()), { nil: undefined })
+  });
+
+/**
+ * Generator for TradeEvent
+ * Requirements: 1.1, 1.2, 1.3, 1.5
+ */
+export const tradeEventArb = (): fc.Arbitrary<TradeEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    tradeCorrelationId: fc.uuid(),
+    eventType: tradeEventTypeArb(),
+    timestamp: isoDateStringArb(),
+    orderDetails: orderSnapshotArb(),
+    strategyId: fc.uuid(),
+    triggerConditions: fc.array(triggerConditionArb(), { minLength: 0, maxLength: 5 }),
+    latencyFromPrevious: fc.option(fc.integer({ min: 0, max: 10000 }), { nil: undefined }),
+    metadata: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+      { minKeys: 0, maxKeys: 5 }
+    )
+  });
+
+/**
+ * Generator for TradeEventInput
+ */
+export const tradeEventInputArb = (): fc.Arbitrary<TradeEventInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    tradeCorrelationId: fc.uuid(),
+    eventType: tradeEventTypeArb(),
+    orderDetails: orderSnapshotArb(),
+    strategyId: fc.uuid(),
+    triggerConditions: fc.array(triggerConditionArb(), { minLength: 0, maxLength: 5 }),
+    metadata: fc.option(
+      fc.dictionary(
+        fc.string({ minLength: 1, maxLength: 20 }),
+        fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+        { minKeys: 0, maxKeys: 5 }
+      ),
+      { nil: undefined }
+    )
+  });
+
+/**
+ * Generator for a sequence of trade events with the same correlation ID
+ * Useful for testing trade lifecycle queries
+ * Requirements: 1.3
+ */
+export const tradeEventSequenceArb = (): fc.Arbitrary<{
+  tenantId: string;
+  tradeCorrelationId: string;
+  events: TradeEvent[];
+}> =>
+  fc.tuple(fc.uuid(), fc.uuid()).chain(([tenantId, tradeCorrelationId]) =>
+    fc.array(
+      fc.record({
+        eventId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        tradeCorrelationId: fc.constant(tradeCorrelationId),
+        eventType: tradeEventTypeArb(),
+        timestamp: isoDateStringArb(),
+        orderDetails: orderSnapshotArb(),
+        strategyId: fc.uuid(),
+        triggerConditions: fc.array(triggerConditionArb(), { minLength: 0, maxLength: 3 }),
+        latencyFromPrevious: fc.option(fc.integer({ min: 0, max: 10000 }), { nil: undefined }),
+        metadata: fc.dictionary(
+          fc.string({ minLength: 1, maxLength: 20 }),
+          fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+          { minKeys: 0, maxKeys: 3 }
+        )
+      }),
+      { minLength: 2, maxLength: 10 }
+    ).map(events => ({
+      tenantId,
+      tradeCorrelationId,
+      events: events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    }))
+  );
+
+/**
+ * Generator for two tenants with separate trade events
+ * Useful for testing tenant isolation
+ */
+export const twoTenantTradeEventsArb = (): fc.Arbitrary<{
+  tenant1Id: string;
+  tenant1Events: TradeEvent[];
+  tenant2Id: string;
+  tenant2Events: TradeEvent[];
+}> =>
+  fc.tuple(fc.uuid(), fc.uuid()).chain(([tenant1Id, tenant2Id]) =>
+    fc.tuple(
+      fc.array(
+        fc.record({
+          eventId: fc.uuid(),
+          tenantId: fc.constant(tenant1Id),
+          tradeCorrelationId: fc.uuid(),
+          eventType: tradeEventTypeArb(),
+          timestamp: isoDateStringArb(),
+          orderDetails: orderSnapshotArb(),
+          strategyId: fc.uuid(),
+          triggerConditions: fc.array(triggerConditionArb(), { minLength: 0, maxLength: 3 }),
+          latencyFromPrevious: fc.option(fc.integer({ min: 0, max: 10000 }), { nil: undefined }),
+          metadata: fc.dictionary(
+            fc.string({ minLength: 1, maxLength: 20 }),
+            fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+            { minKeys: 0, maxKeys: 3 }
+          )
+        }),
+        { minLength: 1, maxLength: 5 }
+      ),
+      fc.array(
+        fc.record({
+          eventId: fc.uuid(),
+          tenantId: fc.constant(tenant2Id),
+          tradeCorrelationId: fc.uuid(),
+          eventType: tradeEventTypeArb(),
+          timestamp: isoDateStringArb(),
+          orderDetails: orderSnapshotArb(),
+          strategyId: fc.uuid(),
+          triggerConditions: fc.array(triggerConditionArb(), { minLength: 0, maxLength: 3 }),
+          latencyFromPrevious: fc.option(fc.integer({ min: 0, max: 10000 }), { nil: undefined }),
+          metadata: fc.dictionary(
+            fc.string({ minLength: 1, maxLength: 20 }),
+            fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+            { minKeys: 0, maxKeys: 3 }
+          )
+        }),
+        { minLength: 1, maxLength: 5 }
+      )
+    ).map(([tenant1Events, tenant2Events]) => ({
+      tenant1Id,
+      tenant1Events,
+      tenant2Id,
+      tenant2Events
+    }))
+  );
+
+
+/**
+ * AI Trace Generators
+ * Requirements: 2.1, 2.2, 2.3, 2.5, 2.6
+ */
+
+import {
+  AITrace,
+  AITraceInput,
+  AIAnalysisType,
+  AIInputSnapshot,
+  MarketDataReference,
+  DecisionInfluence
+} from '../types/ai-trace';
+
+/**
+ * Generator for AIAnalysisType
+ */
+export const aiAnalysisTypeArb = (): fc.Arbitrary<AIAnalysisType> =>
+  fc.constantFrom(
+    'REGIME_CLASSIFICATION',
+    'STRATEGY_EXPLANATION',
+    'PARAMETER_SUGGESTION',
+    'RISK_ASSESSMENT',
+    'MARKET_ANALYSIS'
+  );
+
+/**
+ * Generator for MarketDataReference
+ * Requirements: 2.6
+ */
+export const marketDataReferenceArb = (): fc.Arbitrary<MarketDataReference> =>
+  validDateRangeArb().chain(dateRange =>
+    fc.record({
+      symbols: fc.array(cryptoSymbolArb(), { minLength: 1, maxLength: 10 }),
+      timeRange: fc.constant({ start: dateRange.startDate, end: dateRange.endDate }),
+      snapshotId: fc.uuid()
+    })
+  );
+
+/**
+ * Generator for AIInputSnapshot
+ * Requirements: 2.6
+ */
+export const aiInputSnapshotArb = (): fc.Arbitrary<AIInputSnapshot> =>
+  fc.record({
+    marketDataHash: fc.hexaString({ minLength: 64, maxLength: 64 }),
+    marketDataSnapshot: marketDataReferenceArb(),
+    newsContextIds: fc.option(fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }), { nil: undefined }),
+    sentimentDataIds: fc.option(fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }), { nil: undefined }),
+    onChainDataIds: fc.option(fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }), { nil: undefined }),
+    strategyContext: fc.option(
+      fc.dictionary(
+        fc.string({ minLength: 1, maxLength: 20 }),
+        fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+        { minKeys: 0, maxKeys: 5 }
+      ),
+      { nil: undefined }
+    )
+  });
+
+/**
+ * Generator for AITrace
+ * Requirements: 2.1, 2.2, 2.5, 2.6
+ */
+export const aiTraceArb = (): fc.Arbitrary<AITrace> =>
+  fc.record({
+    traceId: fc.uuid(),
+    tenantId: fc.uuid(),
+    correlationId: fc.option(fc.uuid(), { nil: undefined }),
+    analysisType: aiAnalysisTypeArb(),
+    promptTemplateId: fc.uuid(),
+    promptVersion: fc.integer({ min: 1, max: 100 }),
+    renderedPrompt: fc.string({ minLength: 10, maxLength: 1000 }),
+    inputSnapshot: aiInputSnapshotArb(),
+    rawOutput: fc.string({ minLength: 10, maxLength: 5000 }),
+    validatedOutput: fc.oneof(
+      fc.string(),
+      fc.double({ noNaN: true }),
+      fc.boolean(),
+      fc.dictionary(fc.string(), fc.oneof(fc.string(), fc.double({ noNaN: true })))
+    ),
+    validationPassed: fc.boolean(),
+    modelId: fc.uuid(),
+    modelVersion: fc.string({ minLength: 1, maxLength: 20 }),
+    ensembleWeights: fc.option(
+      fc.dictionary(
+        fc.string({ minLength: 1, maxLength: 20 }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        { minKeys: 1, maxKeys: 5 }
+      ),
+      { nil: undefined }
+    ),
+    processingTimeMs: fc.integer({ min: 0, max: 60000 }),
+    tokenUsage: tokenUsageArb(),
+    costUsd: fc.double({ min: 0, max: 10, noNaN: true }),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for AITraceInput
+ * Requirements: 2.1, 2.2
+ */
+export const aiTraceInputArb = (): fc.Arbitrary<AITraceInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    correlationId: fc.option(fc.uuid(), { nil: undefined }),
+    analysisType: aiAnalysisTypeArb(),
+    promptTemplateId: fc.uuid(),
+    promptVersion: fc.integer({ min: 1, max: 100 }),
+    renderedPrompt: fc.string({ minLength: 10, maxLength: 1000 }),
+    inputSnapshot: aiInputSnapshotArb(),
+    rawOutput: fc.string({ minLength: 10, maxLength: 5000 }),
+    validatedOutput: fc.oneof(
+      fc.string(),
+      fc.double({ noNaN: true }),
+      fc.boolean(),
+      fc.dictionary(fc.string(), fc.oneof(fc.string(), fc.double({ noNaN: true })))
+    ),
+    validationPassed: fc.boolean(),
+    modelId: fc.uuid(),
+    modelVersion: fc.string({ minLength: 1, maxLength: 20 }),
+    ensembleWeights: fc.option(
+      fc.dictionary(
+        fc.string({ minLength: 1, maxLength: 20 }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        { minKeys: 1, maxKeys: 5 }
+      ),
+      { nil: undefined }
+    ),
+    processingTimeMs: fc.integer({ min: 0, max: 60000 }),
+    tokenUsage: tokenUsageArb(),
+    costUsd: fc.double({ min: 0, max: 10, noNaN: true })
+  });
+
+/**
+ * Generator for DecisionInfluence
+ * Requirements: 2.4
+ */
+export const decisionInfluenceArb = (): fc.Arbitrary<DecisionInfluence> =>
+  fc.record({
+    traceId: fc.uuid(),
+    decisionType: fc.constantFrom('TRADE_EXECUTION', 'PARAMETER_ADJUSTMENT', 'RISK_OVERRIDE', 'STRATEGY_SELECTION'),
+    outputValuesUsed: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+      { minKeys: 1, maxKeys: 5 }
+    ),
+    influenceDescription: fc.string({ minLength: 10, maxLength: 200 }),
+    resultingAction: fc.string({ minLength: 5, maxLength: 100 })
+  });
+
+/**
+ * Generator for a sequence of AI traces with the same correlation ID
+ * Useful for testing correlation linking
+ * Requirements: 2.3
+ */
+export const aiTraceSequenceArb = (): fc.Arbitrary<{
+  tenantId: string;
+  correlationId: string;
+  traces: AITrace[];
+}> =>
+  fc.tuple(fc.uuid(), fc.uuid()).chain(([tenantId, correlationId]) =>
+    fc.array(
+      fc.record({
+        traceId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        correlationId: fc.constant(correlationId),
+        analysisType: aiAnalysisTypeArb(),
+        promptTemplateId: fc.uuid(),
+        promptVersion: fc.integer({ min: 1, max: 100 }),
+        renderedPrompt: fc.string({ minLength: 10, maxLength: 500 }),
+        inputSnapshot: aiInputSnapshotArb(),
+        rawOutput: fc.string({ minLength: 10, maxLength: 1000 }),
+        validatedOutput: fc.oneof(fc.string(), fc.double({ noNaN: true })),
+        validationPassed: fc.boolean(),
+        modelId: fc.uuid(),
+        modelVersion: fc.string({ minLength: 1, maxLength: 20 }),
+        ensembleWeights: fc.option(
+          fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.double({ min: 0, max: 1, noNaN: true }), { minKeys: 1, maxKeys: 3 }),
+          { nil: undefined }
+        ),
+        processingTimeMs: fc.integer({ min: 0, max: 60000 }),
+        tokenUsage: tokenUsageArb(),
+        costUsd: fc.double({ min: 0, max: 10, noNaN: true }),
+        timestamp: isoDateStringArb()
+      }),
+      { minLength: 2, maxLength: 5 }
+    ).map(traces => ({
+      tenantId,
+      correlationId,
+      traces: traces.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    }))
+  );
+
+/**
+ * Generator for two tenants with separate AI traces
+ * Useful for testing tenant isolation
+ */
+export const twoTenantAITracesArb = (): fc.Arbitrary<{
+  tenant1Id: string;
+  tenant1Traces: AITrace[];
+  tenant2Id: string;
+  tenant2Traces: AITrace[];
+}> =>
+  fc.tuple(fc.uuid(), fc.uuid()).chain(([tenant1Id, tenant2Id]) =>
+    fc.tuple(
+      fc.array(
+        fc.record({
+          traceId: fc.uuid(),
+          tenantId: fc.constant(tenant1Id),
+          correlationId: fc.option(fc.uuid(), { nil: undefined }),
+          analysisType: aiAnalysisTypeArb(),
+          promptTemplateId: fc.uuid(),
+          promptVersion: fc.integer({ min: 1, max: 100 }),
+          renderedPrompt: fc.string({ minLength: 10, maxLength: 500 }),
+          inputSnapshot: aiInputSnapshotArb(),
+          rawOutput: fc.string({ minLength: 10, maxLength: 1000 }),
+          validatedOutput: fc.oneof(fc.string(), fc.double({ noNaN: true })),
+          validationPassed: fc.boolean(),
+          modelId: fc.uuid(),
+          modelVersion: fc.string({ minLength: 1, maxLength: 20 }),
+          ensembleWeights: fc.option(
+            fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.double({ min: 0, max: 1, noNaN: true }), { minKeys: 1, maxKeys: 3 }),
+            { nil: undefined }
+          ),
+          processingTimeMs: fc.integer({ min: 0, max: 60000 }),
+          tokenUsage: tokenUsageArb(),
+          costUsd: fc.double({ min: 0, max: 10, noNaN: true }),
+          timestamp: isoDateStringArb()
+        }),
+        { minLength: 1, maxLength: 5 }
+      ),
+      fc.array(
+        fc.record({
+          traceId: fc.uuid(),
+          tenantId: fc.constant(tenant2Id),
+          correlationId: fc.option(fc.uuid(), { nil: undefined }),
+          analysisType: aiAnalysisTypeArb(),
+          promptTemplateId: fc.uuid(),
+          promptVersion: fc.integer({ min: 1, max: 100 }),
+          renderedPrompt: fc.string({ minLength: 10, maxLength: 500 }),
+          inputSnapshot: aiInputSnapshotArb(),
+          rawOutput: fc.string({ minLength: 10, maxLength: 1000 }),
+          validatedOutput: fc.oneof(fc.string(), fc.double({ noNaN: true })),
+          validationPassed: fc.boolean(),
+          modelId: fc.uuid(),
+          modelVersion: fc.string({ minLength: 1, maxLength: 20 }),
+          ensembleWeights: fc.option(
+            fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.double({ min: 0, max: 1, noNaN: true }), { minKeys: 1, maxKeys: 3 }),
+            { nil: undefined }
+          ),
+          processingTimeMs: fc.integer({ min: 0, max: 60000 }),
+          tokenUsage: tokenUsageArb(),
+          costUsd: fc.double({ min: 0, max: 10, noNaN: true }),
+          timestamp: isoDateStringArb()
+        }),
+        { minLength: 1, maxLength: 5 }
+      )
+    ).map(([tenant1Traces, tenant2Traces]) => ({
+      tenant1Id,
+      tenant1Traces,
+      tenant2Id,
+      tenant2Traces
+    }))
+  );
+
+
+/**
+ * Audited Risk Event Generators
+ * Requirements: 3.2, 3.3, 3.4, 3.5
+ */
+
+import {
+  AuditedRiskEvent,
+  AuditedRiskEventInput,
+  RejectionDetails,
+  ParameterChangeRecord,
+  MarketConditionSnapshot,
+  FailedCheck
+} from '../types/risk-event';
+
+/**
+ * Generator for FailedCheck
+ * Requirements: 3.4
+ */
+export const failedCheckArb = (): fc.Arbitrary<FailedCheck> =>
+  fc.record({
+    checkType: fc.constantFrom(
+      'POSITION_LIMIT',
+      'DAILY_LOSS_LIMIT',
+      'DRAWDOWN_LIMIT',
+      'VOLATILITY_THRESHOLD',
+      'CONCENTRATION_LIMIT',
+      'ORDER_SIZE_LIMIT'
+    ),
+    currentValue: fc.oneof(
+      fc.double({ min: 0, max: 1000000, noNaN: true }),
+      fc.string({ minLength: 1, maxLength: 50 })
+    ),
+    limitValue: fc.oneof(
+      fc.double({ min: 0, max: 1000000, noNaN: true }),
+      fc.string({ minLength: 1, maxLength: 50 })
+    ),
+    description: fc.string({ minLength: 10, maxLength: 200 })
+  });
+
+/**
+ * Generator for RejectionDetails
+ * Requirements: 3.4
+ */
+export const rejectionDetailsArb = (): fc.Arbitrary<RejectionDetails> =>
+  fc.record({
+    orderId: fc.uuid(),
+    failedChecks: fc.array(failedCheckArb(), { minLength: 1, maxLength: 5 }),
+    orderSnapshot: orderSnapshotArb()
+  });
+
+/**
+ * Generator for ParameterChangeRecord
+ * Requirements: 3.5
+ */
+export const parameterChangeRecordArb = (): fc.Arbitrary<ParameterChangeRecord> =>
+  fc.record({
+    parameterName: fc.constantFrom(
+      'maxPositionSize',
+      'maxDailyLoss',
+      'maxDrawdown',
+      'volatilityThreshold',
+      'concentrationLimit',
+      'orderSizeLimit'
+    ),
+    previousValue: fc.oneof(
+      fc.double({ min: 0, max: 1000000, noNaN: true }),
+      fc.string({ minLength: 1, maxLength: 50 }),
+      fc.boolean()
+    ),
+    newValue: fc.oneof(
+      fc.double({ min: 0, max: 1000000, noNaN: true }),
+      fc.string({ minLength: 1, maxLength: 50 }),
+      fc.boolean()
+    ),
+    changedBy: fc.uuid(),
+    changeReason: fc.option(fc.string({ minLength: 5, maxLength: 200 }), { nil: undefined })
+  });
+
+/**
+ * Generator for MarketConditionSnapshot
+ * Requirements: 3.3
+ */
+export const marketConditionSnapshotArb = (): fc.Arbitrary<MarketConditionSnapshot> =>
+  fc.record({
+    timestamp: isoDateStringArb(),
+    prices: fc.dictionary(
+      cryptoSymbolArb(),
+      fc.double({ min: 0.01, max: 100000, noNaN: true }),
+      { minKeys: 1, maxKeys: 10 }
+    ),
+    volatility: fc.dictionary(
+      cryptoSymbolArb(),
+      fc.double({ min: 0, max: 100, noNaN: true }),
+      { minKeys: 1, maxKeys: 10 }
+    ),
+    volume24h: fc.dictionary(
+      cryptoSymbolArb(),
+      fc.double({ min: 0, max: 1000000000, noNaN: true }),
+      { minKeys: 1, maxKeys: 10 }
+    )
+  });
+
+/**
+ * Generator for AuditedRiskEvent
+ * Requirements: 3.2, 3.3, 3.4, 3.5
+ */
+export const auditedRiskEventArb = (): fc.Arbitrary<AuditedRiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: riskEventTypeArb(),
+    severity: riskEventSeverityArb(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb(),
+    triggeringTradeId: fc.option(fc.uuid(), { nil: undefined }),
+    triggeringMarketConditions: fc.option(marketConditionSnapshotArb(), { nil: undefined }),
+    rejectionDetails: fc.option(rejectionDetailsArb(), { nil: undefined }),
+    parameterChange: fc.option(parameterChangeRecordArb(), { nil: undefined })
+  });
+
+/**
+ * Generator for AuditedRiskEventInput
+ * Requirements: 3.2, 3.3, 3.4, 3.5
+ */
+export const auditedRiskEventInputArb = (): fc.Arbitrary<AuditedRiskEventInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    eventType: riskEventTypeArb(),
+    severity: riskEventSeverityArb(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: fc.option(riskEventMetadataArb(), { nil: undefined }),
+    triggeringTradeId: fc.option(fc.uuid(), { nil: undefined }),
+    triggeringMarketConditions: fc.option(marketConditionSnapshotArb(), { nil: undefined }),
+    rejectionDetails: fc.option(rejectionDetailsArb(), { nil: undefined }),
+    parameterChange: fc.option(parameterChangeRecordArb(), { nil: undefined })
+  });
+
+/**
+ * Generator for AuditedRiskEvent with rejection details (ORDER_REJECTED type)
+ * Requirements: 3.4
+ */
+export const rejectionEventArb = (): fc.Arbitrary<AuditedRiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: fc.constant('ORDER_REJECTED' as const),
+    severity: fc.constantFrom('WARNING', 'CRITICAL') as fc.Arbitrary<'WARNING' | 'CRITICAL'>,
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.constant('Order not submitted'),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb(),
+    triggeringTradeId: fc.option(fc.uuid(), { nil: undefined }),
+    triggeringMarketConditions: fc.option(marketConditionSnapshotArb(), { nil: undefined }),
+    rejectionDetails: rejectionDetailsArb(),
+    parameterChange: fc.constant(undefined)
+  });
+
+/**
+ * Generator for AuditedRiskEvent with parameter change
+ * Requirements: 3.5
+ */
+export const parameterChangeEventArb = (): fc.Arbitrary<AuditedRiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: fc.constant('LIMIT_WARNING' as const),
+    severity: fc.constant('INFO' as const),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.constant('Parameter updated'),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb(),
+    triggeringTradeId: fc.constant(undefined),
+    triggeringMarketConditions: fc.constant(undefined),
+    rejectionDetails: fc.constant(undefined),
+    parameterChange: parameterChangeRecordArb()
+  });
+
+/**
+ * Generator for AuditedRiskEvent with context links
+ * Requirements: 3.3
+ */
+export const contextLinkedEventArb = (): fc.Arbitrary<AuditedRiskEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    tenantId: fc.uuid(),
+    eventType: riskEventTypeArb(),
+    severity: riskEventSeverityArb(),
+    strategyId: fc.option(fc.uuid(), { nil: undefined }),
+    assetId: fc.option(cryptoSymbolArb(), { nil: undefined }),
+    description: fc.string({ minLength: 10, maxLength: 200 }),
+    triggerCondition: fc.string({ minLength: 5, maxLength: 100 }),
+    actionTaken: fc.string({ minLength: 5, maxLength: 100 }),
+    metadata: riskEventMetadataArb(),
+    timestamp: isoDateStringArb(),
+    triggeringTradeId: fc.uuid(),
+    triggeringMarketConditions: marketConditionSnapshotArb(),
+    rejectionDetails: fc.option(rejectionDetailsArb(), { nil: undefined }),
+    parameterChange: fc.option(parameterChangeRecordArb(), { nil: undefined })
+  });
+
+
+/**
+ * Data Lineage Generators
+ * Requirements: 4.1, 4.2, 4.4, 4.5
+ */
+
+import {
+  LineageNode,
+  LineageNodeType,
+  LineageEdge,
+  IngestionRecord,
+  TransformationRecord,
+  UsageRecord
+} from '../types/data-lineage';
+
+/**
+ * Generator for LineageNodeType
+ */
+export const lineageNodeTypeArb = (): fc.Arbitrary<LineageNodeType> =>
+  fc.constantFrom('SOURCE', 'TRANSFORMATION', 'AGGREGATION', 'DECISION_INPUT');
+
+/**
+ * Generator for data types in lineage
+ */
+export const lineageDataTypeArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom('PRICE', 'NEWS', 'SENTIMENT', 'ON_CHAIN', 'MARKET_DATA', 'AGGREGATED_METRICS');
+
+/**
+ * Generator for transformation types
+ */
+export const transformationTypeArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'NORMALIZE',
+    'AGGREGATE',
+    'FILTER',
+    'ENRICH',
+    'VALIDATE',
+    'TRANSFORM',
+    'MERGE',
+    'SPLIT'
+  );
+
+/**
+ * Generator for IngestionRecord
+ * Requirements: 4.1, 4.2
+ */
+export const ingestionRecordArb = (): fc.Arbitrary<IngestionRecord> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    dataType: lineageDataTypeArb(),
+    sourceId: fc.uuid(),
+    sourceName: fc.constantFrom('Binance', 'Coinbase', 'Reuters', 'CoinDesk', 'Glassnode', 'LunarCrush'),
+    qualityScore: fc.option(fc.double({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
+    metadata: fc.option(
+      fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), fc.jsonValue(), { minKeys: 0, maxKeys: 5 }),
+      { nil: undefined }
+    )
+  });
+
+/**
+ * Generator for TransformationRecord
+ * Requirements: 4.4
+ */
+export const transformationRecordArb = (): fc.Arbitrary<TransformationRecord> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    dataType: lineageDataTypeArb(),
+    transformationType: transformationTypeArb(),
+    transformationParams: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+      { minKeys: 1, maxKeys: 5 }
+    ),
+    parentNodeIds: fc.array(fc.uuid(), { minLength: 1, maxLength: 5 }),
+    qualityScore: fc.option(fc.double({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
+    metadata: fc.option(
+      fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), fc.jsonValue(), { minKeys: 0, maxKeys: 5 }),
+      { nil: undefined }
+    )
+  });
+
+/**
+ * Generator for UsageRecord
+ * Requirements: 4.3
+ */
+export const usageRecordArb = (): fc.Arbitrary<UsageRecord> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    dataType: lineageDataTypeArb(),
+    parentNodeIds: fc.array(fc.uuid(), { minLength: 1, maxLength: 5 }),
+    decisionId: fc.uuid(),
+    decisionType: fc.constantFrom('TRADE_SIGNAL', 'RISK_ASSESSMENT', 'PARAMETER_ADJUSTMENT', 'REGIME_CLASSIFICATION'),
+    metadata: fc.option(
+      fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), fc.jsonValue(), { minKeys: 0, maxKeys: 5 }),
+      { nil: undefined }
+    )
+  });
+
+/**
+ * Generator for LineageNode (SOURCE type)
+ * Requirements: 4.1, 4.2
+ */
+export const sourceLineageNodeArb = (): fc.Arbitrary<LineageNode> =>
+  fc.record({
+    nodeId: fc.uuid(),
+    tenantId: fc.uuid(),
+    nodeType: fc.constant('SOURCE' as LineageNodeType),
+    dataType: lineageDataTypeArb(),
+    timestamp: isoDateStringArb(),
+    sourceId: fc.uuid(),
+    sourceName: fc.constantFrom('Binance', 'Coinbase', 'Reuters', 'CoinDesk', 'Glassnode', 'LunarCrush'),
+    ingestionTimestamp: isoDateStringArb(),
+    qualityScore: fc.option(fc.double({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
+    parentNodeIds: fc.constant([]),
+    childNodeIds: fc.array(fc.uuid(), { minLength: 0, maxLength: 3 }),
+    metadata: fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), fc.jsonValue(), { minKeys: 0, maxKeys: 5 })
+  });
+
+/**
+ * Generator for LineageNode (TRANSFORMATION type)
+ * Requirements: 4.4
+ */
+export const transformationLineageNodeArb = (): fc.Arbitrary<LineageNode> =>
+  fc.record({
+    nodeId: fc.uuid(),
+    tenantId: fc.uuid(),
+    nodeType: fc.constant('TRANSFORMATION' as LineageNodeType),
+    dataType: lineageDataTypeArb(),
+    timestamp: isoDateStringArb(),
+    transformationType: transformationTypeArb(),
+    transformationParams: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+      { minKeys: 1, maxKeys: 5 }
+    ),
+    qualityScore: fc.option(fc.double({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
+    parentNodeIds: fc.array(fc.uuid(), { minLength: 1, maxLength: 3 }),
+    childNodeIds: fc.array(fc.uuid(), { minLength: 0, maxLength: 3 }),
+    metadata: fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), fc.jsonValue(), { minKeys: 0, maxKeys: 5 })
+  });
+
+/**
+ * Generator for LineageNode (AGGREGATION type)
+ * Requirements: 4.4
+ */
+export const aggregationLineageNodeArb = (): fc.Arbitrary<LineageNode> =>
+  fc.record({
+    nodeId: fc.uuid(),
+    tenantId: fc.uuid(),
+    nodeType: fc.constant('AGGREGATION' as LineageNodeType),
+    dataType: lineageDataTypeArb(),
+    timestamp: isoDateStringArb(),
+    transformationType: fc.constantFrom('AGGREGATE', 'MERGE', 'COMBINE'),
+    transformationParams: fc.dictionary(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.oneof(fc.string(), fc.double({ noNaN: true }), fc.boolean()),
+      { minKeys: 1, maxKeys: 5 }
+    ),
+    qualityScore: fc.option(fc.double({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
+    parentNodeIds: fc.array(fc.uuid(), { minLength: 2, maxLength: 5 }),
+    childNodeIds: fc.array(fc.uuid(), { minLength: 0, maxLength: 3 }),
+    metadata: fc.dictionary(fc.string({ minLength: 1, maxLength: 20 }), fc.jsonValue(), { minKeys: 0, maxKeys: 5 })
+  });
+
+/**
+ * Generator for LineageNode (DECISION_INPUT type)
+ * Requirements: 4.3
+ */
+export const decisionInputLineageNodeArb = (): fc.Arbitrary<LineageNode> =>
+  fc.record({
+    nodeId: fc.uuid(),
+    tenantId: fc.uuid(),
+    nodeType: fc.constant('DECISION_INPUT' as LineageNodeType),
+    dataType: lineageDataTypeArb(),
+    timestamp: isoDateStringArb(),
+    qualityScore: fc.option(fc.double({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
+    parentNodeIds: fc.array(fc.uuid(), { minLength: 1, maxLength: 5 }),
+    childNodeIds: fc.constant([]),
+    metadata: fc.record({
+      decisionId: fc.uuid(),
+      decisionType: fc.constantFrom('TRADE_SIGNAL', 'RISK_ASSESSMENT', 'PARAMETER_ADJUSTMENT', 'REGIME_CLASSIFICATION')
+    }).map(m => m as Record<string, unknown>)
+  });
+
+/**
+ * Generator for any LineageNode type
+ */
+export const lineageNodeArb = (): fc.Arbitrary<LineageNode> =>
+  fc.oneof(
+    sourceLineageNodeArb(),
+    transformationLineageNodeArb(),
+    aggregationLineageNodeArb(),
+    decisionInputLineageNodeArb()
+  );
+
+/**
+ * Generator for LineageEdge
+ * Requirements: 4.5
+ */
+export const lineageEdgeArb = (): fc.Arbitrary<LineageEdge> =>
+  fc.record({
+    edgeId: fc.uuid(),
+    sourceNodeId: fc.uuid(),
+    targetNodeId: fc.uuid(),
+    relationship: fc.constantFrom('DERIVED_FROM', 'AGGREGATED_INTO', 'USED_BY'),
+    timestamp: isoDateStringArb()
+  });
+
+/**
+ * Generator for a connected lineage chain (source -> transformation -> decision)
+ * Requirements: 4.5
+ */
+export const lineageChainArb = (): fc.Arbitrary<{
+  tenantId: string;
+  sourceNode: LineageNode;
+  transformationNode: LineageNode;
+  decisionNode: LineageNode;
+  edges: LineageEdge[];
+}> =>
+  fc.tuple(
+    fc.uuid(), // tenantId
+    fc.uuid(), // sourceNodeId
+    fc.uuid(), // transformationNodeId
+    fc.uuid(), // decisionNodeId
+    isoDateStringArb(), // baseTimestamp
+    lineageDataTypeArb(),
+    fc.constantFrom('Binance', 'Coinbase', 'Reuters'),
+    transformationTypeArb()
+  ).map(([tenantId, sourceId, transformId, decisionId, baseTimestamp, dataType, sourceName, transformType]) => {
+    const sourceTimestamp = baseTimestamp;
+    const transformTimestamp = new Date(new Date(baseTimestamp).getTime() + 1000).toISOString();
+    const decisionTimestamp = new Date(new Date(baseTimestamp).getTime() + 2000).toISOString();
+
+    const sourceNode: LineageNode = {
+      nodeId: sourceId,
+      tenantId,
+      nodeType: 'SOURCE',
+      dataType,
+      timestamp: sourceTimestamp,
+      sourceId: 'src-' + sourceId,
+      sourceName,
+      ingestionTimestamp: sourceTimestamp,
+      qualityScore: 0.95,
+      parentNodeIds: [],
+      childNodeIds: [transformId],
+      metadata: {}
+    };
+
+    const transformationNode: LineageNode = {
+      nodeId: transformId,
+      tenantId,
+      nodeType: 'TRANSFORMATION',
+      dataType,
+      timestamp: transformTimestamp,
+      transformationType: transformType,
+      transformationParams: { method: 'standard' },
+      qualityScore: 0.9,
+      parentNodeIds: [sourceId],
+      childNodeIds: [decisionId],
+      metadata: {}
+    };
+
+    const decisionNode: LineageNode = {
+      nodeId: decisionId,
+      tenantId,
+      nodeType: 'DECISION_INPUT',
+      dataType,
+      timestamp: decisionTimestamp,
+      parentNodeIds: [transformId],
+      childNodeIds: [],
+      metadata: {
+        decisionId: 'decision-' + decisionId,
+        decisionType: 'TRADE_SIGNAL'
+      }
+    };
+
+    const edges: LineageEdge[] = [
+      {
+        edgeId: 'edge-1-' + sourceId,
+        sourceNodeId: sourceId,
+        targetNodeId: transformId,
+        relationship: 'DERIVED_FROM',
+        timestamp: transformTimestamp
+      },
+      {
+        edgeId: 'edge-2-' + transformId,
+        sourceNodeId: transformId,
+        targetNodeId: decisionId,
+        relationship: 'USED_BY',
+        timestamp: decisionTimestamp
+      }
+    ];
+
+    return { tenantId, sourceNode, transformationNode, decisionNode, edges };
+  });
+
+
+/**
+ * Audit Package Generators
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+ */
+
+import { 
+  AuditPackage, 
+  AuditPackageScope, 
+  ExportFormat, 
+  PackageContents 
+} from '../types/audit-package';
+
+/**
+ * Generator for ExportFormat
+ */
+export const exportFormatArb = (): fc.Arbitrary<ExportFormat> =>
+  fc.constantFrom('JSON', 'CSV', 'PDF');
+
+/**
+ * Generator for AuditPackageScope
+ * Requirements: 5.3
+ */
+export const auditPackageScopeArb = (): fc.Arbitrary<AuditPackageScope> =>
+  fc.record({
+    timeRange: validDateRangeArb(),
+    strategyIds: fc.option(fc.array(fc.uuid(), { minLength: 1, maxLength: 5 }), { nil: undefined }),
+    assetIds: fc.option(fc.array(cryptoSymbolArb(), { minLength: 1, maxLength: 10 }), { nil: undefined }),
+    includeAll: fc.option(fc.boolean(), { nil: undefined })
+  });
+
+/**
+ * Generator for PackageContents
+ * Requirements: 5.2
+ */
+export const packageContentsArb = (): fc.Arbitrary<PackageContents> =>
+  fc.record({
+    tradeLifecycleLogs: fc.integer({ min: 0, max: 10000 }),
+    aiTraces: fc.integer({ min: 0, max: 5000 }),
+    riskEvents: fc.integer({ min: 0, max: 1000 }),
+    dataLineageRecords: fc.integer({ min: 0, max: 5000 })
+  });
+
+/**
+ * Generator for AuditPackage
+ * Requirements: 5.1, 5.2, 5.4, 5.6
+ */
+export const auditPackageArb = (): fc.Arbitrary<AuditPackage> =>
+  fc.record({
+    packageId: fc.uuid(),
+    tenantId: fc.uuid(),
+    generatedAt: isoDateStringArb(),
+    scope: auditPackageScopeArb(),
+    format: exportFormatArb(),
+    contents: packageContentsArb(),
+    integrityHash: fc.hexaString({ minLength: 64, maxLength: 64 }),
+    hashAlgorithm: fc.constant('SHA-256' as const),
+    downloadUrl: fc.constant('https://s3.amazonaws.com/audit-data/packages/test-package.json'),
+    downloadExpiresAt: isoDateStringArb(),
+    sizeBytes: fc.integer({ min: 100, max: 100000000 }),
+    compressed: fc.boolean()
+  });
+
+/**
+ * Generator for audit package scope with specific time range
+ */
+export const auditPackageScopeWithRangeArb = (
+  startDate: Date,
+  endDate: Date
+): fc.Arbitrary<AuditPackageScope> =>
+  fc.record({
+    timeRange: fc.constant({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    }),
+    strategyIds: fc.option(fc.array(fc.uuid(), { minLength: 1, maxLength: 5 }), { nil: undefined }),
+    assetIds: fc.option(fc.array(cryptoSymbolArb(), { minLength: 1, maxLength: 10 }), { nil: undefined }),
+    includeAll: fc.option(fc.boolean(), { nil: undefined })
+  });
+
+/**
+ * Generator for audit export data (for testing export functions)
+ */
+export const auditExportDataArb = (): fc.Arbitrary<{
+  tradeEvents: TradeEvent[];
+  aiTraces: AITrace[];
+  riskEvents: AuditedRiskEvent[];
+  lineageNodes: LineageNode[];
+}> =>
+  fc.record({
+    tradeEvents: fc.array(tradeEventArb(), { minLength: 0, maxLength: 10 }),
+    aiTraces: fc.array(aiTraceArb(), { minLength: 0, maxLength: 10 }),
+    riskEvents: fc.array(auditedRiskEventArb(), { minLength: 0, maxLength: 10 }),
+    lineageNodes: fc.array(lineageNodeArb(), { minLength: 0, maxLength: 10 })
+  });
+
+/**
+ * Generator for non-empty audit export data (ensures at least one record in each category)
+ */
+export const nonEmptyAuditExportDataArb = (): fc.Arbitrary<{
+  tradeEvents: TradeEvent[];
+  aiTraces: AITrace[];
+  riskEvents: AuditedRiskEvent[];
+  lineageNodes: LineageNode[];
+}> =>
+  fc.record({
+    tradeEvents: fc.array(tradeEventArb(), { minLength: 1, maxLength: 5 }),
+    aiTraces: fc.array(aiTraceArb(), { minLength: 1, maxLength: 5 }),
+    riskEvents: fc.array(auditedRiskEventArb(), { minLength: 1, maxLength: 5 }),
+    lineageNodes: fc.array(lineageNodeArb(), { minLength: 1, maxLength: 5 })
+  });
+
+
+/**
+ * Compliance Report Generators
+ * Requirements: 6.1, 6.2, 6.4
+ */
+
+import {
+  ReportTemplate,
+  ReportSection,
+  ReportSectionType,
+  ReportSchedule,
+  ReportFilters,
+  ReportSummary,
+  ComplianceReport,
+  GeneratedSection,
+  DeliveryChannel
+} from '../types/compliance-report';
+
+/**
+ * Generator for ReportSectionType
+ */
+export const reportSectionTypeArb = (): fc.Arbitrary<ReportSectionType> =>
+  fc.constantFrom('SUMMARY', 'TABLE', 'CHART', 'TEXT');
+
+/**
+ * Generator for ReportSection
+ * Requirements: 6.1
+ */
+export const reportSectionArb = (): fc.Arbitrary<ReportSection> =>
+  fc.record({
+    sectionId: fc.uuid(),
+    title: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+    type: reportSectionTypeArb(),
+    dataQuery: fc.constantFrom('trade_events', 'risk_events', 'ai_traces', 'lineage'),
+    formatting: fc.record({
+      columns: fc.option(fc.array(fc.string({ minLength: 1, maxLength: 50 }), { minLength: 0, maxLength: 10 }), { nil: undefined }),
+      chartType: fc.option(fc.constantFrom('line', 'bar', 'pie'), { nil: undefined }),
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+
+/**
+ * Generator for ReportTemplate
+ * Requirements: 6.1
+ */
+export const reportTemplateArb = (): fc.Arbitrary<ReportTemplate> =>
+  fc.record({
+    templateId: fc.uuid(),
+    name: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+    description: fc.string({ minLength: 1, maxLength: 500 }),
+    sections: fc.array(reportSectionArb(), { minLength: 1, maxLength: 10 }),
+    format: fc.constantFrom('PDF', 'HTML', 'XLSX'),
+    version: fc.integer({ min: 1, max: 100 })
+  });
+
+/**
+ * Generator for DeliveryChannel
+ * Requirements: 6.3
+ */
+export const deliveryChannelArb = (): fc.Arbitrary<DeliveryChannel> =>
+  fc.record({
+    type: fc.constantFrom('EMAIL', 'S3', 'WEBHOOK'),
+    destination: fc.string({ minLength: 5, maxLength: 200 })
+  });
+
+/**
+ * Generator for ReportFilters
+ * Requirements: 6.6
+ */
+export const reportFiltersArb = (): fc.Arbitrary<ReportFilters> =>
+  fc.record({
+    dateRange: fc.option(validDateRangeArb(), { nil: undefined }),
+    assetIds: fc.option(fc.array(cryptoSymbolArb(), { minLength: 1, maxLength: 10 }), { nil: undefined }),
+    strategyIds: fc.option(fc.array(fc.uuid(), { minLength: 1, maxLength: 5 }), { nil: undefined }),
+    metrics: fc.option(fc.array(fc.constantFrom('trades', 'volume', 'pnl', 'risk', 'ai'), { minLength: 1, maxLength: 5 }), { nil: undefined })
+  });
+
+/**
+ * Generator for ReportSchedule
+ * Requirements: 6.3
+ */
+export const reportScheduleArb = (): fc.Arbitrary<ReportSchedule> =>
+  fc.record({
+    scheduleId: fc.uuid(),
+    tenantId: fc.uuid(),
+    templateId: fc.uuid(),
+    frequency: fc.constantFrom('DAILY', 'WEEKLY', 'MONTHLY'),
+    deliveryChannels: fc.array(deliveryChannelArb(), { minLength: 1, maxLength: 3 }),
+    filters: reportFiltersArb(),
+    enabled: fc.boolean(),
+    nextRunAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for ReportSummary
+ * Requirements: 6.4
+ */
+export const reportSummaryArb = (): fc.Arbitrary<ReportSummary> =>
+  fc.tuple(
+    fc.array(fc.tuple(cryptoSymbolArb(), fc.integer({ min: 0, max: 1000 })), { minLength: 0, maxLength: 10 }),
+    fc.array(fc.tuple(cryptoSymbolArb(), fc.double({ min: 0, max: 1000000, noNaN: true })), { minLength: 0, maxLength: 10 }),
+    fc.array(fc.tuple(fc.constantFrom('INFO', 'WARNING', 'CRITICAL', 'EMERGENCY'), fc.integer({ min: 0, max: 100 })), { minLength: 0, maxLength: 4 }),
+    fc.array(fc.tuple(fc.uuid(), fc.integer({ min: 0, max: 500 })), { minLength: 0, maxLength: 5 }),
+    fc.double({ min: -100000, max: 100000, noNaN: true }),
+    fc.double({ min: -100000, max: 100000, noNaN: true })
+  ).map(([tradesByAsset, volumesByAsset, riskBySeverity, aiByModel, realized, unrealized]) => {
+    const tradeCounts: Record<string, number> = {};
+    let totalTrades = 0;
+    for (const [asset, count] of tradesByAsset) {
+      tradeCounts[asset] = (tradeCounts[asset] || 0) + count;
+      totalTrades += count;
+    }
+
+    const volumes: Record<string, number> = {};
+    let totalVolume = 0;
+    for (const [asset, vol] of volumesByAsset) {
+      volumes[asset] = (volumes[asset] || 0) + vol;
+      totalVolume += vol;
+    }
+
+    const riskEvents: Record<string, number> = {};
+    let totalRisk = 0;
+    for (const [severity, count] of riskBySeverity) {
+      riskEvents[severity] = (riskEvents[severity] || 0) + count;
+      totalRisk += count;
+    }
+
+    const aiUsage: Record<string, number> = {};
+    let totalAI = 0;
+    for (const [model, count] of aiByModel) {
+      aiUsage[model] = (aiUsage[model] || 0) + count;
+      totalAI += count;
+    }
+
+    return {
+      tradeCounts: { total: totalTrades, byAsset: tradeCounts },
+      volumes: { total: totalVolume, byAsset: volumes },
+      pnl: { realized, unrealized, total: realized + unrealized },
+      riskEvents: { total: totalRisk, bySeverity: riskEvents },
+      aiUsage: { totalAnalyses: totalAI, byModel: aiUsage }
+    };
+  });
+
+/**
+ * Generator for GeneratedSection
+ */
+export const generatedSectionArb = (): fc.Arbitrary<GeneratedSection> =>
+  fc.record({
+    sectionId: fc.uuid(),
+    title: fc.string({ minLength: 1, maxLength: 100 }),
+    type: reportSectionTypeArb(),
+    content: fc.oneof(
+      fc.record({ count: fc.integer({ min: 0, max: 1000 }), data: fc.array(fc.jsonValue(), { minLength: 0, maxLength: 10 }) }),
+      fc.record({ rows: fc.array(fc.jsonValue(), { minLength: 0, maxLength: 100 }), columns: fc.array(fc.string(), { minLength: 0, maxLength: 10 }) }),
+      fc.record({ text: fc.string({ minLength: 0, maxLength: 500 }), details: fc.dictionary(fc.string(), fc.string()) })
+    )
+  });
+
+/**
+ * Generator for ComplianceReport
+ * Requirements: 6.2, 6.4, 6.5
+ */
+export const complianceReportArb = (): fc.Arbitrary<ComplianceReport> =>
+  fc.record({
+    reportId: fc.uuid(),
+    tenantId: fc.uuid(),
+    templateId: fc.uuid(),
+    generatedAt: isoDateStringArb(),
+    dateRange: validDateRangeArb(),
+    summary: reportSummaryArb(),
+    sections: fc.array(generatedSectionArb(), { minLength: 1, maxLength: 10 }),
+    storageUrl: fc.constant('https://s3.amazonaws.com/compliance-reports/test-report.json'),
+    format: fc.constantFrom('PDF', 'HTML', 'XLSX')
+  });
+
+/**
+ * Generator for template and matching report pair
+ */
+export const templateAndReportArb = (): fc.Arbitrary<{ template: ReportTemplate; report: ComplianceReport }> =>
+  reportTemplateArb().chain(template =>
+    fc.record({
+      reportId: fc.uuid(),
+      tenantId: fc.uuid(),
+      templateId: fc.constant(template.templateId),
+      generatedAt: isoDateStringArb(),
+      dateRange: validDateRangeArb(),
+      summary: reportSummaryArb(),
+      sections: fc.constant(template.sections.map(s => ({
+        sectionId: s.sectionId,
+        title: s.title,
+        type: s.type,
+        content: { count: 0, data: [] }
+      }))),
+      storageUrl: fc.constant('https://s3.amazonaws.com/compliance-reports/test-report.json'),
+      format: fc.constant(template.format)
+    }).map(report => ({ template, report }))
+  );
+
+
+/**
+ * Retention Policy Generators
+ * Requirements: 8.1, 8.3, 8.4, 8.6
+ */
+
+import {
+  RetentionPolicy,
+  RetentionPolicyInput,
+  StorageUsage,
+  ArchiveResult,
+  RetrievalJob,
+  DeletionValidation
+} from '../types/retention';
+
+/**
+ * Generator for valid record types
+ */
+export const recordTypeArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'TRADE_EVENT',
+    'AI_TRACE',
+    'RISK_EVENT',
+    'DATA_LINEAGE',
+    'ACCESS_LOG',
+    'AUDIT_PACKAGE',
+    'COMPLIANCE_REPORT'
+  );
+
+/**
+ * Generator for RetentionPolicyInput with valid constraints
+ * Requirements: 8.1, 8.3
+ */
+export const retentionPolicyInputArb = (): fc.Arbitrary<RetentionPolicyInput> =>
+  fc.tuple(
+    fc.integer({ min: 365, max: 3650 }), // archiveAfterDays (1-10 years)
+    fc.integer({ min: 1, max: 365 })     // buffer between archive and retention
+  ).chain(([archiveAfterDays, buffer]) => {
+    const retentionDays = archiveAfterDays + buffer;
+    return fc.record({
+      tenantId: fc.uuid(),
+      recordType: recordTypeArb(),
+      retentionDays: fc.constant(retentionDays),
+      archiveAfterDays: fc.constant(archiveAfterDays),
+      minimumRetentionDays: fc.option(fc.integer({ min: 365, max: archiveAfterDays }), { nil: undefined }),
+      enabled: fc.option(fc.boolean(), { nil: undefined })
+    });
+  });
+
+/**
+ * Generator for RetentionPolicy
+ * Requirements: 8.1, 8.3
+ */
+export const retentionPolicyArb = (): fc.Arbitrary<RetentionPolicy> =>
+  fc.tuple(
+    fc.integer({ min: 365, max: 3650 }), // archiveAfterDays
+    fc.integer({ min: 1, max: 365 })     // buffer
+  ).chain(([archiveAfterDays, buffer]) => {
+    const retentionDays = archiveAfterDays + buffer;
+    const minimumRetentionDays = Math.min(archiveAfterDays, 2555); // Default 7 years or less
+    return fc.record({
+      policyId: fc.uuid(),
+      tenantId: fc.uuid(),
+      recordType: recordTypeArb(),
+      retentionDays: fc.constant(retentionDays),
+      archiveAfterDays: fc.constant(archiveAfterDays),
+      minimumRetentionDays: fc.constant(minimumRetentionDays),
+      enabled: fc.boolean()
+    });
+  });
+
+/**
+ * Generator for StorageUsage
+ * Requirements: 8.5
+ */
+export const storageUsageArb = (): fc.Arbitrary<StorageUsage> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    hotStorageBytes: fc.integer({ min: 0, max: 1000000000000 }), // Up to 1TB
+    coldStorageBytes: fc.integer({ min: 0, max: 10000000000000 }), // Up to 10TB
+    totalBytes: fc.integer({ min: 0, max: 11000000000000 }),
+    estimatedMonthlyCostUsd: fc.double({ min: 0, max: 10000, noNaN: true }),
+    recordCounts: fc.dictionary(
+      recordTypeArb(),
+      fc.integer({ min: 0, max: 1000000 }),
+      { minKeys: 0, maxKeys: 7 }
+    ),
+    asOfTimestamp: isoDateStringArb()
+  }).map(usage => ({
+    ...usage,
+    totalBytes: usage.hotStorageBytes + usage.coldStorageBytes
+  }));
+
+/**
+ * Generator for ArchiveResult
+ * Requirements: 8.2
+ */
+export const archiveResultArb = (): fc.Arbitrary<ArchiveResult> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    recordsArchived: fc.integer({ min: 0, max: 100000 }),
+    bytesArchived: fc.integer({ min: 0, max: 1000000000 }),
+    recordTypes: fc.dictionary(
+      recordTypeArb(),
+      fc.integer({ min: 0, max: 10000 }),
+      { minKeys: 0, maxKeys: 7 }
+    ),
+    completedAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for RetrievalJob status
+ */
+export const retrievalJobStatusArb = (): fc.Arbitrary<'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'> =>
+  fc.constantFrom('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED');
+
+/**
+ * Generator for RetrievalJob
+ * Requirements: 8.4
+ */
+export const retrievalJobArb = (): fc.Arbitrary<RetrievalJob> =>
+  fc.record({
+    jobId: fc.uuid(),
+    tenantId: fc.uuid(),
+    recordType: recordTypeArb(),
+    timeRange: validDateRangeArb(),
+    status: retrievalJobStatusArb(),
+    estimatedCompletionTime: fc.option(isoDateStringArb(), { nil: undefined }),
+    downloadUrl: fc.option(fc.constant('https://s3.amazonaws.com/archive/download'), { nil: undefined }),
+    createdAt: isoDateStringArb(),
+    completedAt: fc.option(isoDateStringArb(), { nil: undefined })
+  });
+
+/**
+ * Generator for DeletionValidation
+ * Requirements: 8.6
+ */
+export const deletionValidationArb = (): fc.Arbitrary<DeletionValidation> =>
+  fc.tuple(
+    fc.array(fc.uuid(), { minLength: 0, maxLength: 20 }),
+    fc.boolean()
+  ).map(([recordIds, allowed]) => {
+    const protectedCount = allowed ? 0 : Math.ceil(recordIds.length / 2);
+    const protectedRecordIds = recordIds.slice(0, protectedCount);
+    return {
+      allowed,
+      recordsChecked: recordIds.length,
+      recordsProtected: protectedCount,
+      protectedRecordIds,
+      reason: allowed ? undefined : `${protectedCount} record(s) are within the minimum retention period`
+    };
+  });
+
+/**
+ * Generator for record timestamp within retention period
+ */
+export const timestampWithinRetentionArb = (retentionDays: number): fc.Arbitrary<string> =>
+  fc.integer({ min: 0, max: retentionDays - 1 }).map(daysAgo => {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return date.toISOString();
+  });
+
+/**
+ * Generator for record timestamp outside retention period
+ */
+export const timestampOutsideRetentionArb = (retentionDays: number): fc.Arbitrary<string> =>
+  fc.integer({ min: retentionDays + 1, max: retentionDays + 365 }).map(daysAgo => {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return date.toISOString();
+  });
+
+
+/**
+ * Access Control Generators
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+ */
+
+import {
+  AuditRole,
+  AccessLogEntry,
+  AccessLogInput,
+  MaskingConfig,
+  MaskType
+} from '../types/audit-access';
+
+/**
+ * Generator for AuditRole
+ * Requirements: 9.3
+ */
+export const auditRoleArb = (): fc.Arbitrary<AuditRole> =>
+  fc.constantFrom('VIEWER', 'ANALYST', 'ADMIN');
+
+/**
+ * Generator for MaskType
+ * Requirements: 9.5
+ */
+export const maskTypeArb = (): fc.Arbitrary<MaskType> =>
+  fc.constantFrom('FULL', 'PARTIAL', 'HASH');
+
+/**
+ * Generator for action types
+ */
+export const actionTypeArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'VIEW',
+    'GET',
+    'LIST',
+    'READ',
+    'QUERY',
+    'SEARCH',
+    'AGGREGATE',
+    'EXPORT',
+    'DOWNLOAD',
+    'GENERATE_PACKAGE',
+    'GENERATE_REPORT',
+    'CONFIGURE',
+    'UPDATE',
+    'CREATE',
+    'SET_POLICY',
+    'DELETE',
+    'REMOVE',
+    'ARCHIVE'
+  );
+
+/**
+ * Generator for resource types
+ */
+export const resourceTypeArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'TRADE_EVENT',
+    'AI_TRACE',
+    'RISK_EVENT',
+    'DATA_LINEAGE',
+    'AUDIT_PACKAGE',
+    'COMPLIANCE_REPORT',
+    'RETENTION_POLICY',
+    'ACCESS_LOG'
+  );
+
+/**
+ * Generator for IP addresses
+ */
+export const ipAddressArb = (): fc.Arbitrary<string> =>
+  fc.tuple(
+    fc.integer({ min: 1, max: 255 }),
+    fc.integer({ min: 0, max: 255 }),
+    fc.integer({ min: 0, max: 255 }),
+    fc.integer({ min: 1, max: 254 })
+  ).map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`);
+
+/**
+ * Generator for user agents
+ */
+export const userAgentArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+    'curl/7.68.0',
+    'PostmanRuntime/7.28.4',
+    'python-requests/2.26.0'
+  );
+
+/**
+ * Generator for AccessLogInput
+ * Requirements: 9.4
+ */
+export const accessLogInputArb = (): fc.Arbitrary<AccessLogInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    userId: fc.uuid(),
+    action: actionTypeArb(),
+    resourceType: resourceTypeArb(),
+    resourceId: fc.option(fc.uuid(), { nil: undefined }),
+    ipAddress: fc.option(ipAddressArb(), { nil: undefined }),
+    userAgent: fc.option(userAgentArb(), { nil: undefined }),
+    success: fc.boolean(),
+    failureReason: fc.option(fc.string({ minLength: 10, maxLength: 200 }), { nil: undefined })
+  }).map(input => ({
+    ...input,
+    // Only include failureReason if success is false
+    failureReason: input.success ? undefined : input.failureReason || 'Access denied'
+  }));
+
+/**
+ * Generator for AccessLogEntry
+ * Requirements: 9.4
+ */
+export const accessLogEntryArb = (): fc.Arbitrary<AccessLogEntry> =>
+  fc.record({
+    logId: fc.uuid(),
+    tenantId: fc.uuid(),
+    userId: fc.uuid(),
+    action: actionTypeArb(),
+    resourceType: resourceTypeArb(),
+    resourceId: fc.option(fc.uuid(), { nil: undefined }),
+    timestamp: isoDateStringArb(),
+    ipAddress: fc.option(ipAddressArb(), { nil: undefined }),
+    userAgent: fc.option(userAgentArb(), { nil: undefined }),
+    success: fc.boolean(),
+    failureReason: fc.option(fc.string({ minLength: 10, maxLength: 200 }), { nil: undefined })
+  }).map(entry => ({
+    ...entry,
+    // Only include failureReason if success is false
+    failureReason: entry.success ? undefined : entry.failureReason || 'Access denied'
+  }));
+
+/**
+ * Generator for MaskingConfig
+ * Requirements: 9.5
+ */
+export const maskingConfigArb = (): fc.Arbitrary<MaskingConfig> =>
+  fc.record({
+    fieldPath: fc.constantFrom(
+      'ipAddress',
+      'userAgent',
+      'apiKey',
+      'credentials',
+      'password',
+      'secret',
+      'email',
+      'phone',
+      'ssn'
+    ),
+    maskType: maskTypeArb(),
+    applicableRoles: fc.array(auditRoleArb(), { minLength: 1, maxLength: 3 })
+      .map(roles => [...new Set(roles)]) // Ensure unique roles
+  });
+
+/**
+ * Generator for sensitive data object (for masking tests)
+ * Requirements: 9.5
+ */
+export const sensitiveDataArb = (): fc.Arbitrary<Record<string, unknown>> =>
+  fc.record({
+    id: fc.uuid(),
+    name: fc.string({ minLength: 1, maxLength: 50 }),
+    ipAddress: ipAddressArb(),
+    userAgent: userAgentArb(),
+    apiKey: fc.hexaString({ minLength: 32, maxLength: 32 }),
+    credentials: fc.record({
+      username: fc.string({ minLength: 5, maxLength: 20 }),
+      password: fc.string({ minLength: 8, maxLength: 30 })
+    }),
+    secret: fc.hexaString({ minLength: 16, maxLength: 64 }),
+    publicData: fc.string({ minLength: 10, maxLength: 100 })
+  });
+
+/**
+ * Generator for tenant and user pair
+ */
+export const tenantUserPairArb = (): fc.Arbitrary<{ tenantId: string; userId: string }> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    userId: fc.uuid()
+  });
+
+/**
+ * Generator for access verification request
+ */
+export const accessVerificationRequestArb = (): fc.Arbitrary<{
+  tenantId: string;
+  userId: string;
+  resourceType: string;
+  action: string;
+}> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    userId: fc.uuid(),
+    resourceType: resourceTypeArb(),
+    action: actionTypeArb()
+  });
+
+/**
+ * Generator for role and action pair (for RBAC testing)
+ */
+export const roleActionPairArb = (): fc.Arbitrary<{ role: AuditRole; action: string }> =>
+  fc.record({
+    role: auditRoleArb(),
+    action: actionTypeArb()
+  });
+
+/**
+ * Generator for cross-tenant access attempt (for isolation testing)
+ */
+export const crossTenantAccessArb = (): fc.Arbitrary<{
+  requestingTenantId: string;
+  resourceTenantId: string;
+  userId: string;
+  resourceType: string;
+  action: string;
+}> =>
+  fc.tuple(
+    fc.uuid(), // requestingTenantId
+    fc.uuid(), // resourceTenantId
+    fc.uuid(), // userId
+    resourceTypeArb(),
+    actionTypeArb()
+  ).filter(([t1, t2]) => t1 !== t2) // Ensure different tenants
+  .map(([requestingTenantId, resourceTenantId, userId, resourceType, action]) => ({
+    requestingTenantId,
+    resourceTenantId,
+    userId,
+    resourceType,
+    action
+  }));
+
+/**
+ * Generator for same-tenant access attempt (for isolation testing)
+ */
+export const sameTenantAccessArb = (): fc.Arbitrary<{
+  tenantId: string;
+  userId: string;
+  resourceType: string;
+  action: string;
+}> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    userId: fc.uuid(),
+    resourceType: resourceTypeArb(),
+    action: actionTypeArb()
+  });
+
+
+/**
+ * Real-Time Audit Streaming Generators
+ * Requirements: 10.1, 10.2, 10.4, 10.5, 10.6
+ */
+
+import {
+  StreamSubscription,
+  StreamSubscriptionInput,
+  StreamedAuditEvent,
+  StreamFilters,
+  NotificationConfig,
+  NotificationConfigInput,
+  NotificationChannel,
+  NotificationChannelType
+} from '../types/audit-stream';
+
+/**
+ * Generator for event severity levels
+ */
+export const severityArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'EMERGENCY');
+
+/**
+ * Generator for audit event types
+ */
+export const auditEventTypeArb = (): fc.Arbitrary<string> =>
+  fc.constantFrom(
+    'TRADE_SIGNAL',
+    'ORDER_CREATED',
+    'ORDER_FILLED',
+    'RISK_BREACH',
+    'AI_ANALYSIS',
+    'PARAMETER_CHANGE',
+    'CIRCUIT_BREAKER',
+    'KILL_SWITCH'
+  );
+
+/**
+ * Generator for StreamFilters
+ * Requirements: 10.2
+ */
+export const streamFiltersArb = (): fc.Arbitrary<StreamFilters> =>
+  fc.record({
+    eventTypes: fc.option(fc.array(auditEventTypeArb(), { minLength: 1, maxLength: 5 }), { nil: undefined }),
+    severities: fc.option(fc.array(severityArb(), { minLength: 1, maxLength: 4 }), { nil: undefined }),
+    strategyIds: fc.option(fc.array(fc.uuid(), { minLength: 1, maxLength: 3 }), { nil: undefined })
+  });
+
+/**
+ * Generator for StreamSubscriptionInput
+ * Requirements: 10.1, 10.2
+ */
+export const streamSubscriptionInputArb = (): fc.Arbitrary<StreamSubscriptionInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    userId: fc.uuid(),
+    filters: fc.option(streamFiltersArb(), { nil: undefined })
+  });
+
+/**
+ * Generator for StreamSubscription
+ * Requirements: 10.1, 10.2
+ */
+export const streamSubscriptionArb = (): fc.Arbitrary<StreamSubscription> =>
+  fc.record({
+    subscriptionId: fc.uuid(),
+    tenantId: fc.uuid(),
+    userId: fc.uuid(),
+    filters: streamFiltersArb().map(f => f || {}),
+    createdAt: isoDateStringArb()
+  });
+
+/**
+ * Generator for StreamedAuditEvent
+ * Requirements: 10.1
+ */
+export const streamedAuditEventArb = (): fc.Arbitrary<StreamedAuditEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    eventType: auditEventTypeArb(),
+    severity: severityArb(),
+    timestamp: isoDateStringArb(),
+    summary: fc.string({ minLength: 10, maxLength: 200 }),
+    data: fc.record({
+      tenantId: fc.option(fc.uuid(), { nil: undefined }),
+      strategyId: fc.option(fc.uuid(), { nil: undefined }),
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+
+/**
+ * Generator for StreamedAuditEvent with specific tenant
+ */
+export const streamedAuditEventForTenantArb = (tenantId: string): fc.Arbitrary<StreamedAuditEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    eventType: auditEventTypeArb(),
+    severity: severityArb(),
+    timestamp: isoDateStringArb(),
+    summary: fc.string({ minLength: 10, maxLength: 200 }),
+    data: fc.record({
+      tenantId: fc.constant(tenantId),
+      strategyId: fc.option(fc.uuid(), { nil: undefined }),
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+
+/**
+ * Generator for critical events (CRITICAL or EMERGENCY severity)
+ * Requirements: 10.4
+ */
+export const criticalEventArb = (): fc.Arbitrary<StreamedAuditEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    eventType: auditEventTypeArb(),
+    severity: fc.constantFrom('CRITICAL', 'EMERGENCY'),
+    timestamp: isoDateStringArb(),
+    summary: fc.string({ minLength: 10, maxLength: 200 }),
+    data: fc.record({
+      tenantId: fc.option(fc.uuid(), { nil: undefined }),
+      strategyId: fc.option(fc.uuid(), { nil: undefined }),
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+
+/**
+ * Generator for non-critical events
+ */
+export const nonCriticalEventArb = (): fc.Arbitrary<StreamedAuditEvent> =>
+  fc.record({
+    eventId: fc.uuid(),
+    eventType: auditEventTypeArb(),
+    severity: fc.constantFrom('DEBUG', 'INFO', 'WARNING', 'ERROR'),
+    timestamp: isoDateStringArb(),
+    summary: fc.string({ minLength: 10, maxLength: 200 }),
+    data: fc.record({
+      tenantId: fc.option(fc.uuid(), { nil: undefined }),
+      strategyId: fc.option(fc.uuid(), { nil: undefined }),
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+
+/**
+ * Generator for NotificationChannelType
+ * Requirements: 10.4
+ */
+export const notificationChannelTypeArb = (): fc.Arbitrary<NotificationChannelType> =>
+  fc.constantFrom('EMAIL', 'SMS', 'SLACK', 'WEBHOOK');
+
+/**
+ * Generator for NotificationChannel
+ * Requirements: 10.4
+ */
+export const notificationChannelArb = (): fc.Arbitrary<NotificationChannel> =>
+  fc.record({
+    type: notificationChannelTypeArb(),
+    destination: fc.string({ minLength: 5, maxLength: 100 }),
+    enabled: fc.boolean()
+  });
+
+/**
+ * Generator for NotificationConfigInput
+ * Requirements: 10.4
+ */
+export const notificationConfigInputArb = (): fc.Arbitrary<NotificationConfigInput> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    channels: fc.array(notificationChannelArb(), { minLength: 1, maxLength: 5 }),
+    severityThreshold: fc.constantFrom('CRITICAL', 'EMERGENCY')
+  });
+
+/**
+ * Generator for NotificationConfig
+ * Requirements: 10.4
+ */
+export const notificationConfigArb = (): fc.Arbitrary<NotificationConfig> =>
+  fc.record({
+    tenantId: fc.uuid(),
+    channels: fc.array(notificationChannelArb(), { minLength: 1, maxLength: 5 }),
+    severityThreshold: fc.constantFrom('CRITICAL', 'EMERGENCY')
+  });
+
+/**
+ * Generator for event that matches specific filters
+ */
+export const eventMatchingFiltersArb = (filters: StreamFilters): fc.Arbitrary<StreamedAuditEvent> => {
+  const eventType = filters.eventTypes && filters.eventTypes.length > 0
+    ? fc.constantFrom(...filters.eventTypes)
+    : auditEventTypeArb();
+  
+  const severity = filters.severities && filters.severities.length > 0
+    ? fc.constantFrom(...filters.severities)
+    : severityArb();
+  
+  const strategyIdArb = filters.strategyIds && filters.strategyIds.length > 0
+    ? fc.constantFrom(...filters.strategyIds)
+    : fc.uuid();
+
+  return fc.record({
+    eventId: fc.uuid(),
+    eventType,
+    severity,
+    timestamp: isoDateStringArb(),
+    summary: fc.string({ minLength: 10, maxLength: 200 }),
+    data: fc.record({
+      tenantId: fc.option(fc.uuid(), { nil: undefined }),
+      strategyId: strategyIdArb.map(id => id as string | undefined),
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+};
+
+/**
+ * Generator for event that does NOT match specific filters
+ */
+export const eventNotMatchingFiltersArb = (filters: StreamFilters): fc.Arbitrary<StreamedAuditEvent> => {
+  // Create an event that doesn't match at least one filter
+  const allEventTypes = ['TRADE_SIGNAL', 'ORDER_CREATED', 'ORDER_FILLED', 'RISK_BREACH', 'AI_ANALYSIS', 'PARAMETER_CHANGE', 'CIRCUIT_BREAKER', 'KILL_SWITCH'];
+  const allSeverities = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'EMERGENCY'];
+  
+  // Find event types NOT in the filter
+  const excludedEventTypes = filters.eventTypes && filters.eventTypes.length > 0
+    ? allEventTypes.filter(t => !filters.eventTypes!.includes(t))
+    : [];
+  
+  // Find severities NOT in the filter
+  const excludedSeverities = filters.severities && filters.severities.length > 0
+    ? allSeverities.filter(s => !filters.severities!.includes(s))
+    : [];
+
+  // Use excluded values if available, otherwise use any
+  const eventType = excludedEventTypes.length > 0
+    ? fc.constantFrom(...excludedEventTypes)
+    : auditEventTypeArb();
+  
+  const severity = excludedSeverities.length > 0
+    ? fc.constantFrom(...excludedSeverities)
+    : severityArb();
+
+  return fc.record({
+    eventId: fc.uuid(),
+    eventType,
+    severity,
+    timestamp: isoDateStringArb(),
+    summary: fc.string({ minLength: 10, maxLength: 200 }),
+    data: fc.record({
+      tenantId: fc.option(fc.uuid(), { nil: undefined }),
+      strategyId: fc.uuid().map(id => id as string | undefined), // Different strategy ID
+      details: fc.option(fc.dictionary(fc.string(), fc.string()), { nil: undefined })
+    })
+  });
+};
+
+/**
+ * Generator for subscription and matching event pair
+ */
+export const subscriptionAndMatchingEventArb = (): fc.Arbitrary<{
+  subscription: StreamSubscription;
+  event: StreamedAuditEvent;
+}> =>
+  streamSubscriptionArb().chain(subscription =>
+    eventMatchingFiltersArb(subscription.filters).map(event => ({
+      subscription,
+      event: {
+        ...event,
+        data: {
+          ...event.data,
+          tenantId: subscription.tenantId
+        }
+      }
+    }))
+  );
+
+/**
+ * Generator for multiple subscriptions for the same tenant
+ * Requirements: 10.5
+ */
+export const multipleSubscriptionsArb = (count: number = 3): fc.Arbitrary<StreamSubscription[]> =>
+  fc.uuid().chain(tenantId =>
+    fc.array(
+      fc.record({
+        subscriptionId: fc.uuid(),
+        tenantId: fc.constant(tenantId),
+        userId: fc.uuid(),
+        filters: streamFiltersArb().map(f => f || {}),
+        createdAt: isoDateStringArb()
+      }),
+      { minLength: count, maxLength: count }
+    )
+  );
+
+/**
+ * Generator for buffered events sequence
+ * Requirements: 10.6
+ */
+export const bufferedEventsSequenceArb = (count: number = 5): fc.Arbitrary<StreamedAuditEvent[]> =>
+  fc.array(streamedAuditEventArb(), { minLength: count, maxLength: count })
+    .map(events => {
+      // Sort by timestamp to ensure proper ordering
+      const baseTime = Date.now() - count * 1000;
+      return events.map((event, index) => ({
+        ...event,
+        timestamp: new Date(baseTime + index * 1000).toISOString()
+      }));
+    });

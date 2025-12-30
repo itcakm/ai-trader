@@ -35,7 +35,8 @@ export const TableNames = {
   EXCHANGE_HEALTH: process.env.EXCHANGE_HEALTH_TABLE || 'exchange-health',
   RATE_LIMIT_STATE: process.env.RATE_LIMIT_STATE_TABLE || 'rate-limit-state',
   RISK_EVENTS: process.env.RISK_EVENTS_TABLE || 'risk-events',
-  ALERT_CONFIGS: process.env.ALERT_CONFIGS_TABLE || 'alert-configs'
+  ALERT_CONFIGS: process.env.ALERT_CONFIGS_TABLE || 'alert-configs',
+  TRADE_LIFECYCLE: process.env.TRADE_LIFECYCLE_TABLE || 'trade-lifecycle'
 } as const;
 
 /**
@@ -433,5 +434,10 @@ export const GSINames = {
   },
   ALERT_CONFIGS: {
     // No additional indexes needed
+  },
+  TRADE_LIFECYCLE: {
+    CORRELATION_INDEX: 'correlationId-timestamp-index',
+    STRATEGY_INDEX: 'strategyId-timestamp-index',
+    EVENT_TYPE_INDEX: 'eventType-timestamp-index'
   }
 } as const;
