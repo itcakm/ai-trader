@@ -1,0 +1,494 @@
+# Implementation Plan: Exchange Integration
+
+## Overview
+
+This implementation plan breaks down the Exchange Integration feature into discrete coding tasks. The feature provides connectivity to external crypto exchanges via REST, WebSocket, and FIX protocols, enabling order management, position tracking, and real-time execution.
+
+## Tasks
+
+- [x] 1. Set up project structure and core types
+  - [x] 1.1 Create exchange integration type definitions
+    - Create `src/types/exchange.ts` with ExchangeId, ExchangeStatus, ExchangeMode, AuthMethod types
+    - Create ExchangeConfig, ExchangeFeatures, ExchangeRateLimits, EncryptedCredentials interfaces
+    - _Requirements: 1.1, 1.2, 1.5_
+  - [x] 1.2 Create order types
+    - Create `src/types/exchange-order.ts` with OrderType, OrderSide, OrderStatus, TimeInForce types
+    - Create OrderRequest, OrderResponse, Order, Fill, OrderUpdate, ExecutionUpdate interfaces
+    - _Requirements: 5.1, 5.2, 5.5, 5.6_
+  - [x] 1.3 Create position types
+    - Create `src/types/exchange-position.ts` with Position, AggregatedPosition, PositionHistory interfaces
+    - _Requirements: 7.1, 7.6_
+  - [x] 1.4 Create connection and rate limit types
+    - Create `src/types/exchange-connection.ts` with Connection, ConnectionPool, ConnectionMetrics interfaces
+    - Create `src/types/exchange-rate-limit.ts` with RateLimitState, RateLimitConfig interfaces
+    - _Requirements: 8.1, 8.6, 9.1, 9.3_
+  - [x] 1.5 Create error handling types
+    - Create `src/types/exchange-error.ts` with ErrorCategory, ExchangeError, RetryConfig interfaces
+    - _Requirements: 10.1_
+
+- [x] 2. Implement base Exchange Adapter
+  - [x] 2.1 Create base exchange adapter abstract class
+    - Create `src/adapters/exchange/base-exchange-adapter.ts`
+    - Implement common connection management, health check, and rate limit status methods
+    - Define abstract methods for order operations
+    - _Requirements: 1.1, 1.3, 2.1_
+
+  - [x] 2.2 Write property test for exchange adapter interface consistency
+    - **Property 1: Exchange Adapter Interface Consistency**
+    - **Validates: Requirements 1.1, 1.3, 2.1**
+  - [x] 2.3 Implement exchange configuration validation
+    - Validate required fields on registration
+    - Validate credentials format per auth method
+    - _Requirements: 1.2, 1.5_
+  - [x] 2.4 Write property test for exchange registration completeness
+    - **Property 2: Exchange Registration Completeness**
+    - **Validates: Requirements 1.2, 1.5**
+
+- [x] 3. Implement Exchange Service
+  - [x] 3.1 Create exchange service
+    - Create `src/services/exchange.ts`
+    - Implement registerExchange, getExchange, updateExchange, listExchanges methods
+    - Implement setExchangeStatus for marking exchanges active/inactive
+    - _Requirements: 1.2, 1.4, 1.5_
+  - [x] 3.2 Create exchange repository
+    - Create `src/repositories/exchange.ts`
+    - Implement DynamoDB operations for exchange configs
+    - _Requirements: 1.2_
+  - [x] 3.3 Write property test for exchange unavailability handling
+    - **Property 3: Exchange Unavailability Handling**
+    - **Validates: Requirements 1.4, 6.4**
+  - [x] 3.4 Implement sandbox mode support
+    - Add endpoint switching logic based on ExchangeMode
+    - Ensure sandbox configs use testnet endpoints
+    - _Requirements: 1.6_
+  - [x] 3.5 Write property test for sandbox mode isolation
+    - **Property 4: Sandbox Mode Isolation**
+    - **Validates: Requirements 1.6**
+
+- [x] 4. Checkpoint - Core types and exchange service
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Implement REST Client
+  - [x] 5.1 Create REST client
+    - Create `src/adapters/exchange/rest-client.ts`
+    - Implement request method with timeout and error handling
+    - Implement signRequest for different auth methods (API_KEY, HMAC, OAuth)
+    - _Requirements: 2.1, 2.2_
+  - [x] 5.2 Write property test for REST authentication correctness
+    - **Property 5: REST Authentication Correctness**
+    - **Validates: Requirements 2.2**
+  - [x] 5.3 Implement retry logic with exponential backoff
+    - Add retry wrapper with configurable max retries, initial delay, multiplier
+    - Implement delay calculation: initialDelay * (multiplier ^ attemptNumber)
+    - _Requirements: 2.3, 10.2_
+  - [x] 5.4 Write property test for retry with exponential backoff
+    - **Property 6: Retry with Exponential Backoff**
+    - **Validates: Requirements 2.3, 10.2**
+
+
+- [x] 6. Implement Error Handler
+  - [x] 6.1 Create error handler service
+    - Create `src/services/exchange-error-handler.ts`
+    - Implement categorizeError to classify errors as RETRYABLE, RATE_LIMITED, INVALID_REQUEST, EXCHANGE_ERROR, or FATAL
+    - Implement shouldRetry and getRetryDelay methods
+    - _Requirements: 2.4, 10.1_
+  - [x] 6.2 Write property test for error categorization completeness
+    - **Property 7: Error Categorization Completeness**
+    - **Validates: Requirements 2.4, 10.1**
+  - [x] 6.3 Implement error logging and alerting
+    - Log full error details for EXCHANGE_ERROR category
+    - Trigger alerts for investigation
+    - _Requirements: 10.5_
+  - [x] 6.4 Write property test for exchange error alerting
+    - **Property 38: Exchange Error Alerting**
+    - **Validates: Requirements 10.5**
+
+- [x] 7. Implement Rate Limiter
+  - [x] 7.1 Create rate limiter service
+    - Create `src/services/exchange-rate-limiter.ts`
+    - Implement checkLimit, consumeLimit, getRateLimitStatus methods
+    - Track usage per exchange per category (ORDERS, QUERIES, WEBSOCKET, WEIGHT)
+    - _Requirements: 9.1, 9.3, 9.6_
+  - [x] 7.2 Implement request queuing
+    - Queue requests when approaching rate limits
+    - Reserve capacity for critical operations (cancellations)
+    - _Requirements: 2.5, 9.2, 9.5_
+  - [x] 7.3 Write property test for rate limit enforcement
+    - **Property 8: Rate Limit Enforcement**
+    - **Validates: Requirements 2.5, 9.1, 9.2, 9.5**
+  - [x] 7.4 Implement retry-after header handling
+    - Parse retry-after from exchange responses
+    - Delay subsequent requests accordingly
+    - _Requirements: 9.4_
+  - [x] 7.5 Write property test for retry-after header handling
+    - **Property 34: Retry-After Header Handling**
+    - **Validates: Requirements 9.4**
+  - [x] 7.6 Write property test for rate limit category support
+    - **Property 33: Rate Limit Category Support**
+    - **Validates: Requirements 9.3**
+  - [x] 7.7 Write property test for rate limit visibility
+    - **Property 35: Rate Limit Visibility**
+    - **Validates: Requirements 9.6**
+
+- [x] 8. Checkpoint - REST client and rate limiting
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 9. Implement Audit Service
+  - [x] 9.1 Create audit service
+    - Create `src/services/exchange-audit.ts`
+    - Implement logOperation to record all REST API requests and responses
+    - Include timestamp, latency, success status in logs
+    - _Requirements: 2.6_
+  - [x] 9.2 Create audit repository
+    - Create `src/repositories/exchange-audit.ts`
+    - Implement DynamoDB operations for audit logs with TTL
+    - _Requirements: 2.6_
+  - [x] 9.3 Write property test for audit log completeness
+    - **Property 9: Audit Log Completeness**
+    - **Validates: Requirements 2.6**
+
+- [x] 10. Implement WebSocket Client
+  - [x] 10.1 Create WebSocket client
+    - Create `src/adapters/exchange/websocket-client.ts`
+    - Implement connect, disconnect, send, subscribe, unsubscribe methods
+    - Implement message parsing and event emission
+    - _Requirements: 3.1, 3.2_
+  - [x] 10.2 Write property test for WebSocket message normalization
+    - **Property 10: WebSocket Message Normalization**
+    - **Validates: Requirements 3.1, 3.2**
+  - [x] 10.3 Implement automatic reconnection
+    - Add reconnection with exponential backoff on connection drop
+    - Re-subscribe to all active subscriptions after reconnection
+    - _Requirements: 3.3, 3.4_
+  - [x] 10.4 Write property test for connection recovery with exponential backoff
+    - **Property 11: Connection Recovery with Exponential Backoff**
+    - **Validates: Requirements 3.3, 3.4, 4.4, 8.2**
+  - [x] 10.5 Implement heartbeat mechanism
+    - Send periodic heartbeats at configured interval
+    - Mark connection unhealthy if no response within timeout
+    - _Requirements: 3.5_
+  - [x] 10.6 Write property test for WebSocket heartbeat maintenance
+    - **Property 12: WebSocket Heartbeat Maintenance**
+    - **Validates: Requirements 3.5**
+  - [x] 10.7 Write property test for multiple concurrent WebSocket connections
+    - **Property 12a: Multiple Concurrent WebSocket Connections**
+    - **Validates: Requirements 3.6**
+
+- [x] 11. Implement FIX Client
+  - [x] 11.1 Create FIX client
+    - Create `src/adapters/exchange/fix-client.ts`
+    - Implement connect, disconnect, sendMessage, logon, logout methods
+    - Handle FIX 4.2/4.4 protocol messages
+    - _Requirements: 4.1, 4.2_
+  - [x] 11.2 Create FIX order translator
+    - Create `src/adapters/exchange/fix-translator.ts`
+    - Implement toFIXNewOrderSingle, fromFIXExecutionReport methods
+    - Translate between internal order format and FIX message format
+    - _Requirements: 4.3_
+  - [x] 11.3 Write property test for FIX message round-trip
+    - **Property 13: FIX Message Round-Trip**
+    - **Validates: Requirements 4.1, 4.3**
+  - [x] 11.4 Implement FIX session management
+    - Handle Logon (35=A), Heartbeat (35=0), Logout (35=5) messages
+    - Track sequence numbers and handle gap fill requests
+    - _Requirements: 4.2, 4.6_
+  - [x] 11.5 Write property test for FIX session management
+    - **Property 14: FIX Session Management**
+    - **Validates: Requirements 4.2, 4.6**
+  - [x] 11.6 Implement FIX message logging
+    - Log all FIX messages sent and received with timestamps
+    - _Requirements: 4.5_
+  - [x] 11.7 Write property test for FIX message logging
+    - **Property 15: FIX Message Logging**
+    - **Validates: Requirements 4.5**
+
+- [x] 12. Checkpoint - WebSocket and FIX clients
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 13. Implement Binance Exchange Adapter
+  - [x] 13.1 Create Binance adapter
+    - Create `src/adapters/exchange/binance-adapter.ts`
+    - Extend BaseExchangeAdapter
+    - Implement REST API calls for order submission, cancellation, status query, balance query
+    - _Requirements: 1.1, 2.1_
+  - [x] 13.2 Implement Binance WebSocket integration
+    - Subscribe to user data stream for order updates and executions
+    - Parse Binance-specific message formats
+    - _Requirements: 3.1, 3.2_
+  - [x] 13.3 Implement Binance-specific authentication
+    - Implement HMAC signature generation for REST requests
+    - Handle API key authentication for WebSocket
+    - _Requirements: 2.2_
+
+- [x] 14. Implement Coinbase Exchange Adapter
+  - [x] 14.1 Create Coinbase adapter
+    - Create `src/adapters/exchange/coinbase-adapter.ts`
+    - Extend BaseExchangeAdapter
+    - Implement REST API calls with passphrase authentication
+    - _Requirements: 1.1, 2.1, 2.2_
+  - [x] 14.2 Implement Coinbase WebSocket integration
+    - Subscribe to user channel for order updates
+    - _Requirements: 3.1, 3.2_
+
+- [x] 14a. Implement Additional Exchange Adapters
+  - [x] 14a.1 Create BSDEX adapter
+    - Create `src/adapters/exchange/bsdex-adapter.ts`
+    - Extend BaseExchangeAdapter for Boerse Stuttgart Digital Exchange
+    - _Requirements: 1.1, 2.1_
+  - [x] 14a.2 Create BISON adapter
+    - Create `src/adapters/exchange/bison-adapter.ts`
+    - Extend BaseExchangeAdapter for BISON trading app
+    - _Requirements: 1.1, 2.1_
+  - [x] 14a.3 Create Finoa adapter
+    - Create `src/adapters/exchange/finoa-adapter.ts`
+    - Extend BaseExchangeAdapter for Finoa custody and trading
+    - _Requirements: 1.1, 2.1_
+  - [x] 14a.4 Create Bybit adapter
+    - Create `src/adapters/exchange/bybit-adapter.ts`
+    - Extend BaseExchangeAdapter
+    - Implement REST and WebSocket integration
+    - _Requirements: 1.1, 2.1, 3.1, 3.2_
+
+- [x] 15. Implement Order Manager
+  - [x] 15.1 Create order manager service
+    - Create `src/services/exchange-order-manager.ts`
+    - Implement submitOrder, cancelOrder, modifyOrder, getOrder, listOrders methods
+    - Assign unique internal order IDs
+    - _Requirements: 5.1, 5.2, 5.3_
+  - [x] 15.2 Create order repository
+    - Create `src/repositories/exchange-order.ts`
+    - Implement DynamoDB operations for orders with GSIs
+    - _Requirements: 5.2_
+  - [x] 15.3 Write property test for order type support
+    - **Property 16: Order Type Support**
+    - **Validates: Requirements 5.1**
+  - [x] 15.4 Write property test for order ID uniqueness
+    - **Property 17: Order ID Uniqueness**
+    - **Validates: Requirements 5.2**
+  - [x] 15.5 Implement order modification support
+    - Submit modifications to exchanges that support it
+    - Update order record only after exchange confirmation
+    - _Requirements: 5.3_
+  - [x] 15.6 Write property test for order modification support
+    - **Property 17a: Order Modification Support**
+    - **Validates: Requirements 5.3**
+  - [x] 15.7 Implement order cancellation with confirmation
+    - Wait for exchange confirmation before updating status
+    - Keep previous status if confirmation fails
+    - _Requirements: 5.4_
+  - [x] 15.8 Write property test for order cancellation confirmation
+    - **Property 18: Order Cancellation Confirmation**
+    - **Validates: Requirements 5.4**
+  - [x] 15.9 Implement partial fill handling
+    - Track filled quantity and remaining quantity
+    - Update on each fill event
+    - _Requirements: 5.5_
+  - [x] 15.10 Write property test for partial fill tracking accuracy
+    - **Property 19: Partial Fill Tracking Accuracy**
+    - **Validates: Requirements 5.5**
+  - [x] 15.11 Implement time-in-force support
+    - Support GTC, IOC, FOK, GTD options
+    - Validate expiresAt for GTD orders
+    - _Requirements: 5.6_
+  - [x] 15.12 Write property test for time-in-force support
+    - **Property 20: Time-in-Force Support**
+    - **Validates: Requirements 5.6**
+
+- [x] 16. Checkpoint - Exchange adapters and order manager
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 17. Implement Order Router
+  - [x] 17.1 Create order router service
+    - Create `src/services/exchange-order-router.ts`
+    - Implement routeOrder method with configurable criteria
+    - Support BEST_PRICE, LOWEST_FEES, HIGHEST_LIQUIDITY, USER_PREFERENCE
+    - _Requirements: 6.1_
+  - [x] 17.2 Create routing config repository
+    - Create `src/repositories/routing-config.ts`
+    - Store and retrieve routing configurations per tenant
+    - _Requirements: 6.1_
+  - [x] 17.3 Write property test for order routing criteria application
+    - **Property 21: Order Routing Criteria Application**
+    - **Validates: Requirements 6.1, 6.5**
+  - [x] 17.4 Implement order book consideration
+    - Fetch order book data from available exchanges
+    - Include bid/ask depth and spread in routing decisions
+    - _Requirements: 6.2_
+  - [x] 17.5 Write property test for order book consideration in routing
+    - **Property 22: Order Book Consideration in Routing**
+    - **Validates: Requirements 6.2**
+  - [x] 17.6 Implement order splitting
+    - Split large orders across multiple exchanges when enabled
+    - Ensure sum of split quantities equals original quantity
+    - _Requirements: 6.3_
+  - [x] 17.7 Write property test for order splitting
+    - **Property 23: Order Splitting**
+    - **Validates: Requirements 6.3**
+  - [x] 17.8 Implement exchange size constraint validation
+    - Validate against minOrderSize and lotSize per exchange
+    - Reject orders violating constraints before submission
+    - _Requirements: 6.6_
+  - [x] 17.9 Write property test for exchange size constraints
+    - **Property 24: Exchange Size Constraints**
+    - **Validates: Requirements 6.6**
+  - [x] 17.10 Implement routing decision tracking
+    - Log all routing decisions with reasoning
+    - Track routing outcomes for optimization
+    - _Requirements: 6.5_
+
+- [x] 18. Implement Duplicate Order Prevention
+  - [x] 18.1 Implement order status verification before retry
+    - Check if order exists on exchange before resubmitting
+    - Prevent duplicate submissions
+    - _Requirements: 10.3_
+  - [x] 18.2 Write property test for duplicate order prevention
+    - **Property 36: Duplicate Order Prevention**
+    - **Validates: Requirements 10.3**
+  - [x] 18.3 Implement idempotency key support
+    - Include idempotencyKey in order submissions
+    - Handle idempotent responses from exchanges
+    - _Requirements: 10.4_
+  - [x] 18.4 Write property test for idempotency key usage
+    - **Property 37: Idempotency Key Usage**
+    - **Validates: Requirements 10.4**
+
+- [x] 19. Checkpoint - Order routing and duplicate prevention
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 20. Implement Position Manager
+  - [x] 20.1 Create position manager service
+    - Create `src/services/exchange-position-manager.ts`
+    - Implement getPosition, getAggregatedPosition, listPositions methods
+    - Track positions per asset, per exchange, and aggregated
+    - _Requirements: 7.1_
+  - [x] 20.2 Create position repository
+    - Create `src/repositories/exchange-position.ts`
+    - Implement DynamoDB operations for positions with GSIs
+    - _Requirements: 7.1_
+  - [x] 20.3 Write property test for position tracking granularity
+    - **Property 25: Position Tracking Granularity**
+    - **Validates: Requirements 7.1**
+  - [x] 20.4 Implement position update from fills
+    - Update quantity on fill (add for BUY, subtract for SELL)
+    - Recalculate average entry price using weighted average
+    - Calculate unrealized P&L
+    - _Requirements: 7.2, 7.5_
+  - [x] 20.5 Write property test for position and P&L accuracy
+    - **Property 26: Position and P&L Accuracy**
+    - **Validates: Requirements 7.2, 7.5**
+  - [x] 20.6 Implement position reconciliation
+    - Compare internal state with exchange data
+    - Use exchange data as source of truth on discrepancy
+    - Generate alerts for discrepancies
+    - _Requirements: 7.3, 7.4_
+  - [x] 20.7 Write property test for position reconciliation source of truth
+    - **Property 27: Position Reconciliation Source of Truth**
+    - **Validates: Requirements 7.3, 7.4**
+  - [x] 20.8 Implement position history tracking
+    - Create PositionHistory records for all position changes
+    - Track open, increase, decrease, close, reconcile events
+    - _Requirements: 7.6_
+  - [x] 20.9 Write property test for position history tracking
+    - **Property 28: Position History Tracking**
+    - **Validates: Requirements 7.6**
+
+- [x] 21. Checkpoint - Position management
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 22. Implement Connection Manager
+  - [x] 22.1 Create connection manager service
+    - Create `src/services/exchange-connection-manager.ts`
+    - Implement getConnection, createConnection, closeConnection methods
+    - Maintain connection pools per exchange
+    - _Requirements: 8.1_
+  - [x] 22.2 Write property test for connection pool management
+    - **Property 29: Connection Pool Management**
+    - **Validates: Requirements 8.1**
+  - [x] 22.3 Implement connection metrics tracking
+    - Track uptimeMs, latencyMs, errorRate, reconnectionCount
+    - Implement getConnectionMetrics method
+    - _Requirements: 8.3, 8.6_
+  - [x] 22.4 Write property test for connection metrics tracking
+    - **Property 30: Connection Metrics Tracking**
+    - **Validates: Requirements 8.3, 8.6**
+  - [x] 22.5 Implement connection quality alerting
+    - Alert when latency or error rate exceeds threshold
+    - Optionally pause trading for degraded exchanges
+    - _Requirements: 8.4_
+  - [x] 22.6 Write property test for connection quality alerting
+    - **Property 31: Connection Quality Alerting**
+    - **Validates: Requirements 8.4**
+  - [x] 22.7 Implement graceful shutdown
+    - Wait for in-flight requests to complete
+    - Do not accept new requests during shutdown
+    - _Requirements: 8.5_
+  - [x] 22.8 Write property test for graceful shutdown
+    - **Property 32: Graceful Shutdown**
+    - **Validates: Requirements 8.5**
+
+
+- [x] 23. Implement Stuck Order Handling
+  - [x] 23.1 Create manual intervention service
+    - Create `src/services/exchange-manual-intervention.ts`
+    - Implement getStuckOrders, resolveStuckOrder, forceCancel, forceReconcile methods
+    - Identify orders stuck in uncertain states beyond threshold
+    - _Requirements: 10.6_
+  - [x] 23.2 Write property test for stuck order identification
+    - **Property 39: Stuck Order Identification**
+    - **Validates: Requirements 10.6**
+
+- [x] 24. Implement Exchange Handlers
+  - [x] 24.1 Create exchange configuration handler
+    - Create `src/handlers/exchange-config.ts`
+    - Implement API endpoints for exchange registration, update, list, status
+    - _Requirements: 1.2, 1.4, 1.5_
+  - [x] 24.2 Create order handler
+    - Create `src/handlers/exchange-orders.ts`
+    - Implement API endpoints for order submission, cancellation, modification, query
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - [x] 24.3 Create position handler
+    - Create `src/handlers/exchange-positions.ts`
+    - Implement API endpoints for position queries and reconciliation
+    - _Requirements: 7.1, 7.3_
+  - [x] 24.4 Create connection handler
+    - Create `src/handlers/exchange-connections.ts`
+    - Implement API endpoints for connection health and metrics
+    - _Requirements: 8.3, 8.6_
+
+- [x] 25. Checkpoint - Connection management and handlers
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 26. Integration and wiring
+  - [x] 26.1 Wire exchange service with adapters
+    - Connect ExchangeService to Binance and Coinbase adapters
+    - Implement adapter factory for creating adapters by exchange ID
+    - _Requirements: 1.1_
+  - [x] 26.2 Wire order manager with router and adapters
+    - Connect OrderManager to OrderRouter
+    - Route orders through appropriate adapters
+    - _Requirements: 5.1, 6.1_
+  - [x] 26.3 Wire position manager with order manager
+    - Update positions on fill events from order manager
+    - _Requirements: 7.2_
+  - [x] 26.4 Wire connection manager with adapters
+    - Manage connections for all adapters through ConnectionManager
+    - _Requirements: 8.1_
+  - [x] 26.5 Wire rate limiter with REST and WebSocket clients
+    - Apply rate limiting to all exchange API calls
+    - _Requirements: 9.1, 9.2_
+
+- [x] 27. Final checkpoint - Integration complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- All tasks are required including property tests for comprehensive coverage
+- Each task references specific requirements for traceability
+- Checkpoints ensure incremental validation
+- Property tests validate universal correctness properties
+- Unit tests validate specific examples and edge cases
+- The implementation follows the Adapter pattern consistent with other features in the codebase

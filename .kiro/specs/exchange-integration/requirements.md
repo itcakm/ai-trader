@@ -8,7 +8,7 @@ Exchange integration is the execution layer that receives validated orders from 
 
 ## Glossary
 
-- **Exchange**: An external crypto trading venue (e.g., Binance, Coinbase, Kraken, FTX).
+- **Exchange**: An external crypto trading venue (e.g., BSDEX (Boerse Stuttgart Digital Exchange, Finoa, BISON, Binance, Coinbase, Kraken, Bybit).
 - **Exchange_Adapter**: An abstraction layer that normalizes communication with different exchanges.
 - **Order**: An instruction to buy or sell a specific quantity of an asset at a specified price or market price.
 - **Order_Type**: The execution method: MARKET, LIMIT, STOP_LIMIT, STOP_MARKET, or TRAILING_STOP.

@@ -4360,7 +4360,7 @@ import {
  * Generator for exchange IDs
  */
 export const exchangeIdArb = (): fc.Arbitrary<string> =>
-  fc.constantFrom('binance', 'coinbase', 'kraken', 'ftx', 'bybit', 'okx');
+  fc.constantFrom('binance', 'coinbase', 'kraken', 'bybit', 'okx');
 
 /**
  * Generator for ExchangeLimits
