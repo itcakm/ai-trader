@@ -4,7 +4,7 @@
  * **Property 1: Provider Adapter Interface Compliance**
  * *For any* registered AI_Provider, the system SHALL have a corresponding Provider_Adapter
  * that implements all methods of the AIProviderAdapter interface (classifyMarketRegime,
- * generateExplanation, suggestParameters, healthCheck, getRemainingQuota).
+ * generateExplanation, suggestParameters, healthCheck, and getRemainingQuota).
  * 
  * **Validates: Requirements 1.3**
  */
