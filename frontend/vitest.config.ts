@@ -19,6 +19,7 @@ export default defineConfig({
       '@/lib': path.resolve(__dirname, './src/lib'),
       '@/types': path.resolve(__dirname, './src/types'),
       '@/styles': path.resolve(__dirname, './src/styles'),
+      '@/store': path.resolve(__dirname, './src/store'),
     },
   },
 });

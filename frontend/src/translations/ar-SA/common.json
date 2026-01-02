@@ -1,0 +1,50 @@
+{
+  "app": {
+    "name": "نظام تداول العملات المشفرة",
+    "loading": "جاري التحميل...",
+    "error": "حدث خطأ",
+    "retry": "إعادة المحاولة",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "search": "بحث",
+    "filter": "تصفية",
+    "export": "تصدير",
+    "import": "استيراد",
+    "confirm": "تأكيد",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "yes": "نعم",
+    "no": "لا"
+  },
+  "navigation": {
+    "dashboard": "لوحة التحكم",
+    "strategies": "الاستراتيجيات",
+    "marketData": "بيانات السوق",
+    "aiIntelligence": "الذكاء الاصطناعي",
+    "riskControls": "ضوابط المخاطر",
+    "exchange": "البورصة",
+    "reports": "التقارير",
+    "settings": "الإعدادات",
+    "help": "المساعدة"
+  },
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "invalidEmail": "عنوان البريد الإلكتروني غير صالح",
+    "minLength": "يجب أن يكون {{min}} حرفًا على الأقل",
+    "maxLength": "يجب ألا يتجاوز {{max}} حرفًا"
+  },
+  "time": {
+    "now": "الآن",
+    "minutesAgo": "منذ دقيقة واحدة",
+    "minutesAgo_plural": "منذ {{count}} دقائق",
+    "hoursAgo": "منذ ساعة واحدة",
+    "hoursAgo_plural": "منذ {{count}} ساعات",
+    "daysAgo": "منذ يوم واحد",
+    "daysAgo_plural": "منذ {{count}} أيام"
+  }
+}
