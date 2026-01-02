@@ -15,7 +15,17 @@ const variantStyles: Record<BadgeVariant, string> = {
   info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
 };
 
-export function Badge({ variant = 'default', children, className = '', ...props }: BadgeProps) {
+const variantAriaLabels: Record<BadgeVariant, string> = {
+  default: '',
+  success: 'Success: ',
+  warning: 'Warning: ',
+  error: 'Error: ',
+  info: 'Information: ',
+};
+
+export function Badge({ variant = 'default', children, className = '', 'aria-label': ariaLabel, ...props }: BadgeProps) {
+  const computedAriaLabel = ariaLabel || (variant !== 'default' ? `${variantAriaLabels[variant]}${children}` : undefined);
+  
   return (
     <span
       className={`
@@ -24,6 +34,8 @@ export function Badge({ variant = 'default', children, className = '', ...props 
         ${variantStyles[variant]}
         ${className}
       `.trim()}
+      role={variant !== 'default' ? 'status' : undefined}
+      aria-label={computedAriaLabel}
       {...props}
     >
       {children}
