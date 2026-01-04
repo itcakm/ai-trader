@@ -19,7 +19,7 @@ export interface DataTableProps {
   title: string;
   data: TableRow[];
   columns: string[];
-  config?: DataTableConfig;
+  config?: Partial<DataTableConfig>;
   onDrillDown?: () => void;
   onRowClick?: (row: TableRow) => void;
   isLoading?: boolean;

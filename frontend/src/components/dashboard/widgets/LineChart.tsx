@@ -10,7 +10,7 @@ import type { DataPoint, ChartConfig } from '@/types/dashboard';
 export interface LineChartProps {
   title: string;
   data: DataPoint[];
-  config?: ChartConfig;
+  config?: Partial<ChartConfig>;
   onDrillDown?: () => void;
   isLoading?: boolean;
   error?: string | null;

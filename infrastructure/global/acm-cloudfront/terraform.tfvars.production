@@ -1,0 +1,21 @@
+# Production Environment Configuration for CloudFront Certificate
+# Use this file when deploying: terraform apply -var-file=terraform.tfvars.production
+
+environment   = "production"
+project_name  = "crypto-trading"
+domain_name   = "acinaces.com"
+
+# Add www subdomain as SAN
+subject_alternative_names = ["www.acinaces.com"]
+
+# Route 53 zone ID - update with actual zone ID after Route 53 module is deployed
+# route53_zone_id = "ZXXXXXXXXXX"
+
+# For initial deployment without Route 53, disable automatic DNS validation
+create_route53_records = false
+wait_for_validation    = false
+
+tags = {
+  Owner      = "devops"
+  CostCenter = "trading-platform-prod"
+}

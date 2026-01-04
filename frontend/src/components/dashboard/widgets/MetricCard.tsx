@@ -10,7 +10,7 @@ import type { MetricData, MetricCardConfig } from '@/types/dashboard';
 export interface MetricCardProps {
   title: string;
   data: MetricData | null;
-  config?: MetricCardConfig;
+  config?: Partial<MetricCardConfig>;
   onDrillDown?: () => void;
   isLoading?: boolean;
   error?: string | null;
