@@ -15,8 +15,14 @@ import type {
   Role,
   ModuleType,
   PermissionCheck,
+  BackendPermission,
 } from '@/types/rbac';
-import { MODULE_PERMISSION_MAP } from '@/types/rbac';
+import { 
+  MODULE_PERMISSION_MAP, 
+  SYSTEM_ROLES, 
+  ROLE_BACKEND_PERMISSIONS,
+  BACKEND_PERMISSIONS,
+} from '@/types/rbac';
 
 // Context
 const RBACContext = createContext<RBACContextValue | undefined>(undefined);
@@ -73,6 +79,33 @@ export function extractPermissionsFromRoles(roles: Role[]): Permission[] {
   return Array.from(permissionMap.values());
 }
 
+/**
+ * Get backend permission strings for a list of role names
+ * Requirements: 6.7, 6.9 - Match backend permission definitions
+ */
+export function getBackendPermissionsForRoles(roleNames: string[]): BackendPermission[] {
+  const permissionSet = new Set<BackendPermission>();
+
+  for (const roleName of roleNames) {
+    const normalizedRole = roleName.toUpperCase();
+    
+    // Check if it's a SUPER_ADMIN (has wildcard permission)
+    if (normalizedRole === SYSTEM_ROLES.SUPER_ADMIN) {
+      return [BACKEND_PERMISSIONS.ALL];
+    }
+    
+    // Get permissions for this role
+    const rolePermissions = ROLE_BACKEND_PERMISSIONS[normalizedRole as keyof typeof ROLE_BACKEND_PERMISSIONS];
+    if (rolePermissions) {
+      for (const permission of rolePermissions) {
+        permissionSet.add(permission);
+      }
+    }
+  }
+
+  return Array.from(permissionSet);
+}
+
 // Provider Props
 interface RBACProviderProps {
   children: React.ReactNode;
@@ -85,8 +118,15 @@ interface RBACProviderProps {
 /**
  * RBACProvider - Provides role-based access control throughout the application
  * 
+ * Requirements: 6.7, 6.9
+ * - Get roles from AuthProvider user context (from JWT claims)
+ * - Match backend permission definitions
+ * - Hide/show elements based on permissions
+ * 
  * Features:
  * - Permission checking (hasPermission, hasAnyPermission, hasAllPermissions)
+ * - Backend permission string checking (hasBackendPermission, etc.)
+ * - Role checking (hasRole, hasAnyRole, hasAllRoles, isSuperAdmin, isAdmin)
  * - Permission inheritance (organization → user override)
  * - Module visibility based on permissions
  * - Permission-based filtering of items
@@ -96,9 +136,23 @@ export function RBACProvider({
   userPermissionOverrides = [],
   organizationPermissions = [],
 }: RBACProviderProps) {
+  // Get roles from AuthProvider user context (from JWT claims)
+  // Requirements: 6.9 - Use roles from JWT claims
   const { session, status } = useAuth();
 
-  // Compute effective permissions with inheritance
+  // Extract role names from session (these come from JWT claims)
+  const roleNames = useMemo(() => {
+    if (!session?.roles) return [];
+    return session.roles.map(role => role.name.toUpperCase());
+  }, [session?.roles]);
+
+  // Compute backend permission strings based on role names
+  // Requirements: 6.7 - Match backend permission definitions
+  const backendPermissions = useMemo(() => {
+    return getBackendPermissionsForRoles(roleNames);
+  }, [roleNames]);
+
+  // Compute effective permissions with inheritance (legacy format)
   const effectivePermissions = useMemo(() => {
     if (!session) return [];
 
@@ -115,44 +169,174 @@ export function RBACProvider({
     return mergePermissionsWithInheritance(orgPerms, userOverrides);
   }, [session, organizationPermissions, userPermissionOverrides]);
 
-  // Check if user has a specific permission
+  // ============================================================================
+  // Legacy Permission Checking (resource/action format)
+  // ============================================================================
+
+  // Check if user has a specific permission (legacy format)
   const hasPermission = useCallback(
     (resource: ResourceType, action: ActionType): boolean => {
+      // SUPER_ADMIN has all permissions
+      if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+        return true;
+      }
       return effectivePermissions.some((p) =>
         permissionMatches(p, resource, action)
       );
     },
-    [effectivePermissions]
+    [effectivePermissions, roleNames]
   );
 
-  // Check if user has any of the specified permissions
+  // Check if user has any of the specified permissions (legacy format)
   const hasAnyPermission = useCallback(
     (permissions: PermissionCheck[]): boolean => {
+      // SUPER_ADMIN has all permissions
+      if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+        return true;
+      }
       return permissions.some(({ resource, action }) =>
         hasPermission(resource, action)
       );
     },
-    [hasPermission]
+    [hasPermission, roleNames]
   );
 
-  // Check if user has all of the specified permissions
+  // Check if user has all of the specified permissions (legacy format)
   const hasAllPermissions = useCallback(
     (permissions: PermissionCheck[]): boolean => {
+      // SUPER_ADMIN has all permissions
+      if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+        return true;
+      }
       return permissions.every(({ resource, action }) =>
         hasPermission(resource, action)
       );
     },
-    [hasPermission]
+    [hasPermission, roleNames]
   );
+
+  // ============================================================================
+  // Backend Permission Checking (string format matching backend)
+  // Requirements: 6.7 - Match backend permission definitions
+  // ============================================================================
+
+  // Check if user has a specific backend permission
+  const hasBackendPermission = useCallback(
+    (permission: BackendPermission): boolean => {
+      // Wildcard permission grants all access
+      if (backendPermissions.includes(BACKEND_PERMISSIONS.ALL)) {
+        return true;
+      }
+      return backendPermissions.includes(permission);
+    },
+    [backendPermissions]
+  );
+
+  // Check if user has any of the specified backend permissions
+  const hasAnyBackendPermission = useCallback(
+    (permissions: BackendPermission[]): boolean => {
+      if (permissions.length === 0) return true;
+      // Wildcard permission grants all access
+      if (backendPermissions.includes(BACKEND_PERMISSIONS.ALL)) {
+        return true;
+      }
+      return permissions.some(permission => backendPermissions.includes(permission));
+    },
+    [backendPermissions]
+  );
+
+  // Check if user has all of the specified backend permissions
+  const hasAllBackendPermissions = useCallback(
+    (permissions: BackendPermission[]): boolean => {
+      if (permissions.length === 0) return true;
+      // Wildcard permission grants all access
+      if (backendPermissions.includes(BACKEND_PERMISSIONS.ALL)) {
+        return true;
+      }
+      return permissions.every(permission => backendPermissions.includes(permission));
+    },
+    [backendPermissions]
+  );
+
+  // ============================================================================
+  // Role Checking
+  // ============================================================================
+
+  // Check if user has a specific role
+  const hasRole = useCallback(
+    (role: string): boolean => {
+      const normalizedRole = role.toUpperCase();
+      // SUPER_ADMIN has all roles implicitly
+      if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+        return true;
+      }
+      return roleNames.includes(normalizedRole);
+    },
+    [roleNames]
+  );
+
+  // Check if user has any of the specified roles
+  const hasAnyRole = useCallback(
+    (roles: string[]): boolean => {
+      if (roles.length === 0) return true;
+      // SUPER_ADMIN has all roles implicitly
+      if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+        return true;
+      }
+      return roles.some(role => roleNames.includes(role.toUpperCase()));
+    },
+    [roleNames]
+  );
+
+  // Check if user has all of the specified roles
+  const hasAllRoles = useCallback(
+    (roles: string[]): boolean => {
+      if (roles.length === 0) return true;
+      // SUPER_ADMIN has all roles implicitly
+      if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+        return true;
+      }
+      return roles.every(role => roleNames.includes(role.toUpperCase()));
+    },
+    [roleNames]
+  );
+
+  // Check if user is a super admin
+  const isSuperAdmin = useCallback((): boolean => {
+    return roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN);
+  }, [roleNames]);
+
+  // Check if user is an admin (tenant admin or super admin)
+  const isAdmin = useCallback((): boolean => {
+    return roleNames.includes(SYSTEM_ROLES.ADMIN) || roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN);
+  }, [roleNames]);
+
+  // ============================================================================
+  // Module Visibility
+  // ============================================================================
 
   // Get list of visible modules based on permissions
   const getVisibleModules = useCallback((): ModuleType[] => {
+    // SUPER_ADMIN sees all modules
+    if (roleNames.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+      return MODULE_PERMISSION_MAP.map(({ module }) => module);
+    }
+    
     return MODULE_PERMISSION_MAP
-      .filter(({ requiredPermissions }) =>
-        hasAnyPermission(requiredPermissions)
-      )
+      .filter(({ requiredPermissions, backendPermissions: moduleBackendPerms }) => {
+        // Check backend permissions first if available
+        if (moduleBackendPerms && moduleBackendPerms.length > 0) {
+          return hasAnyBackendPermission(moduleBackendPerms);
+        }
+        // Fall back to legacy permission check
+        return hasAnyPermission(requiredPermissions);
+      })
       .map(({ module }) => module);
-  }, [hasAnyPermission]);
+  }, [hasAnyPermission, hasAnyBackendPermission, roleNames]);
+
+  // ============================================================================
+  // Filtering
+  // ============================================================================
 
   // Filter items by permission
   const filterByPermission = useCallback(
@@ -172,25 +356,55 @@ export function RBACProvider({
     [hasPermission]
   );
 
+  // ============================================================================
+  // Context Value
+  // ============================================================================
+
   const value: RBACContextValue = useMemo(
     () => ({
+      // Legacy permission checking
       hasPermission,
       hasAnyPermission,
       hasAllPermissions,
+      // Backend permission checking
+      hasBackendPermission,
+      hasAnyBackendPermission,
+      hasAllBackendPermissions,
+      // Role checking
+      hasRole,
+      hasAnyRole,
+      hasAllRoles,
+      isSuperAdmin,
+      isAdmin,
+      // Module visibility
       getVisibleModules,
+      // Filtering
       filterByPermission,
+      // Current state
       permissions: effectivePermissions,
+      backendPermissions,
       roles: session?.roles ?? [],
+      roleNames,
       isLoading: status === 'loading',
     }),
     [
       hasPermission,
       hasAnyPermission,
       hasAllPermissions,
+      hasBackendPermission,
+      hasAnyBackendPermission,
+      hasAllBackendPermissions,
+      hasRole,
+      hasAnyRole,
+      hasAllRoles,
+      isSuperAdmin,
+      isAdmin,
       getVisibleModules,
       filterByPermission,
       effectivePermissions,
+      backendPermissions,
       session?.roles,
+      roleNames,
       status,
     ]
   );
@@ -219,6 +433,14 @@ export function usePermission(
 ): boolean {
   const { hasPermission } = useRBAC();
   return hasPermission(resource, action);
+}
+
+/**
+ * Hook for checking backend permission strings
+ */
+export function useBackendPermission(permission: BackendPermission): boolean {
+  const { hasBackendPermission } = useRBAC();
+  return hasBackendPermission(permission);
 }
 
 /**
@@ -251,4 +473,36 @@ export function usePermissions(permissions: PermissionCheck[]): {
 export function useVisibleModules(): ModuleType[] {
   const { getVisibleModules } = useRBAC();
   return useMemo(() => getVisibleModules(), [getVisibleModules]);
+}
+
+/**
+ * Hook for role checking
+ */
+export function useRole(role: string): boolean {
+  const { hasRole } = useRBAC();
+  return hasRole(role);
+}
+
+/**
+ * Hook for checking multiple roles
+ */
+export function useRoles(roles: string[]): {
+  hasAny: boolean;
+  hasAll: boolean;
+  checks: Record<string, boolean>;
+} {
+  const { hasRole, hasAnyRole, hasAllRoles } = useRBAC();
+
+  return useMemo(() => {
+    const checks: Record<string, boolean> = {};
+    for (const role of roles) {
+      checks[role] = hasRole(role);
+    }
+
+    return {
+      hasAny: hasAnyRole(roles),
+      hasAll: hasAllRoles(roles),
+      checks,
+    };
+  }, [roles, hasRole, hasAnyRole, hasAllRoles]);
 }

@@ -79,27 +79,11 @@ resource "aws_cloudfront_cache_policy" "static_assets" {
 #------------------------------------------------------------------------------
 # Cache Policy for Dynamic Content
 # Requirements: 10.5 - Configure cache behaviors for dynamic content (no cache)
+# Note: Use AWS managed CachingDisabled policy (ID: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad)
+# Custom policies with TTL=0 cannot have compression or query string forwarding
 #------------------------------------------------------------------------------
-resource "aws_cloudfront_cache_policy" "dynamic_content" {
-  name        = "${local.name_prefix}-dynamic-content"
-  comment     = "Cache policy for dynamic content with no caching"
-  default_ttl = 0
-  max_ttl     = 0
-  min_ttl     = 0
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "all"
-    }
-    enable_accept_encoding_brotli = true
-    enable_accept_encoding_gzip   = true
-  }
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
 }
 
 #------------------------------------------------------------------------------
@@ -200,8 +184,8 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${var.s3_bucket_id}"
 
-    # Use managed cache policy for dynamic content
-    cache_policy_id            = aws_cloudfront_cache_policy.dynamic_content.id
+    # Use AWS managed CachingDisabled policy for dynamic content
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.s3_origin.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
 

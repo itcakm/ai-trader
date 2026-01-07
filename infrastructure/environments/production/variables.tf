@@ -247,3 +247,47 @@ variable "github_repositories" {
   description = "List of GitHub repository patterns allowed to assume the CI/CD role"
   default     = []
 }
+
+#------------------------------------------------------------------------------
+# Cognito Configuration
+# Requirements: 1.8, 1.9 - SES and Lambda trigger configuration
+#------------------------------------------------------------------------------
+variable "ses_identity_arn" {
+  type        = string
+  description = "ARN of SES identity for Cognito email delivery (production)"
+  default     = ""
+}
+
+variable "enable_cognito_lambda_triggers" {
+  type        = bool
+  description = "Enable Cognito Lambda triggers (set to true when Lambda functions are deployed)"
+  default     = false
+}
+
+variable "cognito_pre_signup_lambda_arn" {
+  type        = string
+  description = "ARN of the pre-signup Lambda trigger function"
+  default     = ""
+}
+
+variable "cognito_post_confirmation_lambda_arn" {
+  type        = string
+  description = "ARN of the post-confirmation Lambda trigger function"
+  default     = ""
+}
+
+#------------------------------------------------------------------------------
+# Auth Lambda Configuration
+# Requirements: 3.1-3.12 - Auth endpoints proxied through API Gateway
+#------------------------------------------------------------------------------
+variable "auth_lambda_invoke_arn" {
+  type        = string
+  description = "Invoke ARN of the auth Lambda function"
+  default     = ""
+}
+
+variable "auth_lambda_function_name" {
+  type        = string
+  description = "Name of the auth Lambda function"
+  default     = ""
+}

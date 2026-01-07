@@ -44,6 +44,11 @@ api_throttling_burst_limit = 2000
 # Budgets
 monthly_budget_amount = 500
 
+# Module enablement
+enable_timestream = false  # Requires AWS support to enable for new accounts
+enable_budgets    = false  # Requires notification emails
+enable_cloudfront = true   # CloudFront distribution for frontend
+
 # Tags
 owner       = "devops"
 cost_center = "trading-platform-test"

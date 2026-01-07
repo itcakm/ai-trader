@@ -204,7 +204,7 @@ export class LunarCrushSentimentAdapter extends BaseSentimentAdapter {
       throw new Error(`LunarCrush API error: ${response.status}`);
     }
 
-    const data: LunarCrushResponse = await response.json();
+    const data = await response.json() as LunarCrushResponse;
     if (!data.data || data.data.length === 0) {
       throw new Error(`No sentiment data found for ${symbol}`);
     }
@@ -238,7 +238,7 @@ export class LunarCrushSentimentAdapter extends BaseSentimentAdapter {
       throw new Error(`LunarCrush API error: ${response.status}`);
     }
 
-    const data: { data: LunarCrushHistoricalPoint[] } = await response.json();
+    const data = await response.json() as { data: LunarCrushHistoricalPoint[] };
 
     return (data.data || []).map(point =>
       this.normalizeHistoricalPoint(symbol, point)

@@ -3,6 +3,48 @@
 # Requirements: 6.10
 
 #------------------------------------------------------------------------------
+# Layer Zip Archives
+# Creates placeholder zip archives for initial deployment
+#------------------------------------------------------------------------------
+data "archive_file" "aws_sdk_layer" {
+  type        = "zip"
+  output_path = "${path.module}/layers/aws-sdk.zip"
+
+  source {
+    content  = "{}"
+    filename = "nodejs/package.json"
+  }
+}
+
+data "archive_file" "common_utils_layer" {
+  type        = "zip"
+  output_path = "${path.module}/layers/common-utils.zip"
+
+  source {
+    content  = "{}"
+    filename = "nodejs/package.json"
+  }
+}
+
+#------------------------------------------------------------------------------
+# S3 Objects for Layer Packages
+# Uploads layer zip files to S3 before creating layer versions
+#------------------------------------------------------------------------------
+resource "aws_s3_object" "aws_sdk_layer" {
+  bucket = var.s3_deployment_bucket
+  key    = "${var.s3_deployment_key_prefix}/layers/aws-sdk.zip"
+  source = data.archive_file.aws_sdk_layer.output_path
+  etag   = data.archive_file.aws_sdk_layer.output_md5
+}
+
+resource "aws_s3_object" "common_utils_layer" {
+  bucket = var.s3_deployment_bucket
+  key    = "${var.s3_deployment_key_prefix}/layers/common-utils.zip"
+  source = data.archive_file.common_utils_layer.output_path
+  etag   = data.archive_file.common_utils_layer.output_md5
+}
+
+#------------------------------------------------------------------------------
 # AWS SDK Layer
 # Contains AWS SDK and related dependencies
 #------------------------------------------------------------------------------
@@ -13,12 +55,9 @@ resource "aws_lambda_layer_version" "aws_sdk" {
   compatible_architectures = [var.architecture]
 
   s3_bucket = var.s3_deployment_bucket
-  s3_key    = "${var.s3_deployment_key_prefix}/layers/aws-sdk.zip"
+  s3_key    = aws_s3_object.aws_sdk_layer.key
 
-  lifecycle {
-    # Allow CI/CD to update the layer
-    ignore_changes = [s3_key]
-  }
+  depends_on = [aws_s3_object.aws_sdk_layer]
 }
 
 #------------------------------------------------------------------------------
@@ -32,12 +71,9 @@ resource "aws_lambda_layer_version" "common_utils" {
   compatible_architectures = [var.architecture]
 
   s3_bucket = var.s3_deployment_bucket
-  s3_key    = "${var.s3_deployment_key_prefix}/layers/common-utils.zip"
+  s3_key    = aws_s3_object.common_utils_layer.key
 
-  lifecycle {
-    # Allow CI/CD to update the layer
-    ignore_changes = [s3_key]
-  }
+  depends_on = [aws_s3_object.common_utils_layer]
 }
 
 #------------------------------------------------------------------------------

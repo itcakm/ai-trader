@@ -239,3 +239,45 @@ output "waf_cloudfront_web_acl_arn" {
   description = "ARN of the WAF Web ACL for CloudFront"
   value       = module.waf.cloudfront_web_acl_arn
 }
+
+#------------------------------------------------------------------------------
+# Cognito Module Outputs
+# Requirements: 1.10 - Output User Pool ID, App Client ID, and User Pool ARN
+#------------------------------------------------------------------------------
+output "cognito_user_pool_id" {
+  description = "ID of the Cognito User Pool"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_arn" {
+  description = "ARN of the Cognito User Pool"
+  value       = module.cognito.user_pool_arn
+}
+
+output "cognito_app_client_id" {
+  description = "ID of the Cognito App Client"
+  value       = module.cognito.app_client_id
+}
+
+output "cognito_user_pool_endpoint" {
+  description = "Endpoint of the Cognito User Pool"
+  value       = module.cognito.user_pool_endpoint
+}
+
+output "cognito_jwks_uri" {
+  description = "JWKS URI for JWT validation"
+  value       = module.cognito.jwks_uri
+}
+
+output "cognito_issuer" {
+  description = "Token issuer URL for JWT validation"
+  value       = module.cognito.issuer
+}
+
+#------------------------------------------------------------------------------
+# API Gateway Auth Resource Outputs
+#------------------------------------------------------------------------------
+output "api_gateway_auth_resource_ids" {
+  description = "Map of auth resource IDs by path"
+  value       = module.api_gateway.auth_resource_ids
+}

@@ -50,6 +50,11 @@ locals {
     trade-lifecycle    = "audit"
     retention          = "audit"
     snapshots          = "audit"
+
+    # Auth Triggers (Cognito Lambda Triggers)
+    auth-pre-signup          = "auth"
+    auth-post-confirmation   = "auth"
+    auth-post-authentication = "auth"
   }
 
   # All 34 Lambda function configurations
@@ -341,6 +346,34 @@ locals {
       handler              = "handlers/snapshots.handler"
       memory_size          = 1024
       timeout              = 300
+      reserved_concurrency = null
+    }
+
+    #---------------------------------------------------------------------------
+    # Auth Trigger Functions (Cognito Lambda Triggers)
+    # Requirements: 1.8, 12.2, 12.3, 12.4
+    #---------------------------------------------------------------------------
+    auth-pre-signup = {
+      description          = "Cognito pre-signup validation trigger"
+      handler              = "handlers/auth/triggers/pre-signup.handler"
+      memory_size          = 256
+      timeout              = 10
+      reserved_concurrency = null
+    }
+
+    auth-post-confirmation = {
+      description          = "Cognito post-confirmation user setup trigger"
+      handler              = "handlers/auth/triggers/post-confirmation.handler"
+      memory_size          = 256
+      timeout              = 30
+      reserved_concurrency = null
+    }
+
+    auth-post-authentication = {
+      description          = "Cognito post-authentication login notification trigger"
+      handler              = "handlers/auth/triggers/post-authentication.handler"
+      memory_size          = 256
+      timeout              = 30
       reserved_concurrency = null
     }
   }

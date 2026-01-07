@@ -1,9 +1,12 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { AuditService, TenantAccessDeniedError, AuditRecordNotFoundError } from '../services/audit';
 import { AuditQueryService } from '../services/audit-query';
 import { ValidationError } from '../types/validation';
 import { AuditFilters, DateRange } from '../types/audit';
 import { AuditQueryFilters, AggregationOptions, AggregationGroupBy, AggregationMetric } from '../types/audit-query';
+import { requirePermission } from '../middleware/require-role';
+import { PERMISSIONS } from '../types/rbac';
+import { AuthenticatedEvent } from '../middleware/require-auth';
 
 /**
  * Error response body structure
@@ -65,9 +68,17 @@ function errorResponse(
 }
 
 /**
- * Extract tenant ID from request headers
+ * Extract tenant ID from JWT context (preferred) or request headers (deprecated)
  */
-function getTenantId(event: APIGatewayProxyEvent): string | null {
+function getTenantId(event: APIGatewayProxyEvent | AuthenticatedEvent): string | null {
+  // Check if this is an authenticated event with user context
+  const authEvent = event as AuthenticatedEvent;
+  if (authEvent.user?.tenantId) {
+    return authEvent.user.tenantId;
+  }
+  
+  // Fallback to header for backward compatibility (deprecated)
+  console.warn('SECURITY WARNING: Using X-Tenant-Id header instead of JWT. This is deprecated.');
   return event.headers['X-Tenant-Id'] || event.headers['x-tenant-id'] || null;
 }
 
@@ -641,10 +652,77 @@ export async function searchAuditRecords(
 }
 
 /**
+ * Permission-protected route handlers
+ * Requirements: 6.7, 6.8
+ */
+
+// Read operations require read:audit-logs permission
+const readAuditHandler = requirePermission(
+  [PERMISSIONS.AUDIT_LOGS_READ],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const path = event.path;
+    const method = event.httpMethod;
+
+    // Route: POST /audit/query (Requirements: 7.1)
+    if (method === 'POST' && path === '/audit/query') {
+      return queryAuditRecords(event);
+    }
+
+    // Route: POST /audit/aggregate (Requirements: 7.3)
+    if (method === 'POST' && path === '/audit/aggregate') {
+      return aggregateAuditRecords(event);
+    }
+
+    // Route: POST /audit/search (Requirements: 7.5)
+    if (method === 'POST' && path === '/audit/search') {
+      return searchAuditRecords(event);
+    }
+
+    // Route: GET /audit/count
+    if (method === 'GET' && path === '/audit/count') {
+      return getAuditCount(event);
+    }
+
+    // Route: GET /audit/model/{modelConfigId}
+    if (method === 'GET' && path.match(/^\/audit\/model\/[^/]+$/)) {
+      return getAuditRecordsByModel(event);
+    }
+
+    // Route: GET /audit/type/{analysisType}
+    if (method === 'GET' && path.match(/^\/audit\/type\/[^/]+$/)) {
+      return getAuditRecordsByType(event);
+    }
+
+    // Route: GET /audit/{auditId}
+    if (method === 'GET' && path.match(/^\/audit\/[^/]+$/) && !path.includes('/model/') && !path.includes('/type/') && !path.includes('/count') && !path.includes('/export')) {
+      return getAuditRecord(event);
+    }
+
+    // Route: GET /audit
+    if (method === 'GET' && path === '/audit') {
+      return getAuditRecords(event);
+    }
+
+    return errorResponse(404, 'Route not found', 'NOT_FOUND');
+  }
+);
+
+// Export operations require export:audit-logs permission
+const exportAuditHandler = requirePermission(
+  [PERMISSIONS.AUDIT_LOGS_EXPORT],
+  async (event: AuthenticatedEvent, context: Context) => {
+    return exportAuditRecords(event);
+  }
+);
+
+/**
  * Main handler that routes requests based on HTTP method and path
+ * 
+ * Requirements: 6.7, 6.8 - Check permissions before executing operations
  */
 export async function handler(
-  event: APIGatewayProxyEvent
+  event: APIGatewayProxyEvent,
+  context: Context
 ): Promise<APIGatewayProxyResult> {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -658,50 +736,11 @@ export async function handler(
   const path = event.path;
   const method = event.httpMethod;
 
-  // Route: POST /audit/export
+  // Route: POST /audit/export - requires export:audit-logs permission
   if (method === 'POST' && path === '/audit/export') {
-    return exportAuditRecords(event);
+    return exportAuditHandler(event, context);
   }
 
-  // Route: POST /audit/query (Requirements: 7.1)
-  if (method === 'POST' && path === '/audit/query') {
-    return queryAuditRecords(event);
-  }
-
-  // Route: POST /audit/aggregate (Requirements: 7.3)
-  if (method === 'POST' && path === '/audit/aggregate') {
-    return aggregateAuditRecords(event);
-  }
-
-  // Route: POST /audit/search (Requirements: 7.5)
-  if (method === 'POST' && path === '/audit/search') {
-    return searchAuditRecords(event);
-  }
-
-  // Route: GET /audit/count
-  if (method === 'GET' && path === '/audit/count') {
-    return getAuditCount(event);
-  }
-
-  // Route: GET /audit/model/{modelConfigId}
-  if (method === 'GET' && path.match(/^\/audit\/model\/[^/]+$/)) {
-    return getAuditRecordsByModel(event);
-  }
-
-  // Route: GET /audit/type/{analysisType}
-  if (method === 'GET' && path.match(/^\/audit\/type\/[^/]+$/)) {
-    return getAuditRecordsByType(event);
-  }
-
-  // Route: GET /audit/{auditId}
-  if (method === 'GET' && path.match(/^\/audit\/[^/]+$/) && !path.includes('/model/') && !path.includes('/type/') && !path.includes('/count') && !path.includes('/export')) {
-    return getAuditRecord(event);
-  }
-
-  // Route: GET /audit
-  if (method === 'GET' && path === '/audit') {
-    return getAuditRecords(event);
-  }
-
-  return errorResponse(404, 'Route not found', 'NOT_FOUND');
+  // All other routes require read:audit-logs permission
+  return readAuditHandler(event, context);
 }

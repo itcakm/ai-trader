@@ -227,10 +227,12 @@ resource "aws_api_gateway_request_validator" "all" {
 # API Gateway Account Settings (for CloudWatch logging)
 #------------------------------------------------------------------------------
 resource "aws_api_gateway_account" "main" {
-  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
+  cloudwatch_role_arn = var.create_cloudwatch_role ? aws_iam_role.api_gateway_cloudwatch[0].arn : var.existing_cloudwatch_role_arn
 }
 
 resource "aws_iam_role" "api_gateway_cloudwatch" {
+  count = var.create_cloudwatch_role ? 1 : 0
+
   name = "${local.name_prefix}-api-gateway-cloudwatch"
 
   assume_role_policy = jsonencode({
@@ -250,8 +252,10 @@ resource "aws_iam_role" "api_gateway_cloudwatch" {
 }
 
 resource "aws_iam_role_policy" "api_gateway_cloudwatch" {
+  count = var.create_cloudwatch_role ? 1 : 0
+
   name = "${local.name_prefix}-api-gateway-cloudwatch"
-  role = aws_iam_role.api_gateway_cloudwatch.id
+  role = aws_iam_role.api_gateway_cloudwatch[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"

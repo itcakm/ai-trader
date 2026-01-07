@@ -120,3 +120,9 @@ variable "tags" {
   description = "Additional tags for resources"
   default     = {}
 }
+
+variable "excluded_functions" {
+  type        = list(string)
+  description = "List of function names to exclude from deployment (e.g., functions without packages yet)"
+  default     = []
+}

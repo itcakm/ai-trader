@@ -34,9 +34,10 @@ resource "aws_route53_zone" "main" {
 #------------------------------------------------------------------------------
 # A Record (Alias) for CloudFront Distribution
 # Requirements: 18.2 - Create A records (alias) for CloudFront distribution
+# Note: Caller must ensure cloudfront_domain_name is provided when create_cloudfront_record is true
 #------------------------------------------------------------------------------
 resource "aws_route53_record" "cloudfront" {
-  count = var.create_cloudfront_record && var.cloudfront_domain_name != null ? 1 : 0
+  count = var.create_cloudfront_record ? 1 : 0
 
   zone_id = var.create_hosted_zone ? aws_route53_zone.main[0].zone_id : var.hosted_zone_id
   name    = var.domain_name
@@ -51,7 +52,7 @@ resource "aws_route53_record" "cloudfront" {
 
 # IPv6 AAAA Record for CloudFront Distribution
 resource "aws_route53_record" "cloudfront_ipv6" {
-  count = var.create_cloudfront_record && var.cloudfront_domain_name != null && var.enable_ipv6 ? 1 : 0
+  count = var.create_cloudfront_record && var.enable_ipv6 ? 1 : 0
 
   zone_id = var.create_hosted_zone ? aws_route53_zone.main[0].zone_id : var.hosted_zone_id
   name    = var.domain_name
@@ -100,9 +101,10 @@ resource "aws_route53_record" "api_gateway_ipv6" {
 #------------------------------------------------------------------------------
 # WWW Subdomain Record (Optional)
 # Redirects www.domain.com to domain.com via CloudFront
+# Note: Caller must ensure cloudfront_domain_name is provided when create_www_record is true
 #------------------------------------------------------------------------------
 resource "aws_route53_record" "www" {
-  count = var.create_www_record && var.cloudfront_domain_name != null ? 1 : 0
+  count = var.create_www_record ? 1 : 0
 
   zone_id = var.create_hosted_zone ? aws_route53_zone.main[0].zone_id : var.hosted_zone_id
   name    = "www.${var.domain_name}"
@@ -234,7 +236,7 @@ resource "aws_route53_hosted_zone_dnssec" "main" {
 # Requirements: 18.5 - Configure failover routing policies for production
 #------------------------------------------------------------------------------
 resource "aws_route53_record" "cloudfront_primary" {
-  count = var.enable_failover && local.is_production && var.cloudfront_domain_name != null ? 1 : 0
+  count = var.enable_failover && local.is_production && var.create_cloudfront_record ? 1 : 0
 
   zone_id = var.create_hosted_zone ? aws_route53_zone.main[0].zone_id : var.hosted_zone_id
   name    = var.domain_name

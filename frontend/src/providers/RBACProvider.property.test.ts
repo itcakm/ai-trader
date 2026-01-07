@@ -1,6 +1,6 @@
 /**
  * Feature: ui-implementation, Property 1: RBAC Enforcement Consistency
- * Validates: Requirements 1.6, 2.1, 2.4, 7.5, 11.6
+ * Validates: Requirements 1.6, 2.1, 2.4, 6.7, 6.9, 7.5, 11.6
  *
  * For any user with a defined set of permissions, and for any UI element, module,
  * search result, or audit log entry, the visibility and accessibility of that item
@@ -10,11 +10,12 @@
 
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import type { Permission, Role, ResourceType, ActionType, PermissionCheck, ModuleType } from '@/types/rbac';
-import { MODULE_PERMISSION_MAP } from '@/types/rbac';
+import type { Permission, Role, ResourceType, ActionType, PermissionCheck, ModuleType, BackendPermission } from '@/types/rbac';
+import { MODULE_PERMISSION_MAP, SYSTEM_ROLES, ROLE_BACKEND_PERMISSIONS, BACKEND_PERMISSIONS } from '@/types/rbac';
 import {
   mergePermissionsWithInheritance,
   extractPermissionsFromRoles,
+  getBackendPermissionsForRoles,
 } from './RBACProvider';
 
 // Arbitraries for generating test data
@@ -62,6 +63,32 @@ const permissionCheckArbitrary: fc.Arbitrary<PermissionCheck> = fc.record({
   resource: resourceTypeArbitrary,
   action: actionTypeArbitrary,
 });
+
+// System role arbitrary for testing backend permissions
+const systemRoleArbitrary = fc.constantFrom<string>(
+  SYSTEM_ROLES.VIEWER,
+  SYSTEM_ROLES.TRADER,
+  SYSTEM_ROLES.ANALYST,
+  SYSTEM_ROLES.ADMIN,
+  SYSTEM_ROLES.SUPER_ADMIN
+);
+
+// Backend permission arbitrary
+const backendPermissionArbitrary = fc.constantFrom<BackendPermission>(
+  BACKEND_PERMISSIONS.STRATEGIES_READ,
+  BACKEND_PERMISSIONS.STRATEGIES_WRITE,
+  BACKEND_PERMISSIONS.ORDERS_READ,
+  BACKEND_PERMISSIONS.ORDERS_EXECUTE,
+  BACKEND_PERMISSIONS.POSITIONS_READ,
+  BACKEND_PERMISSIONS.REPORTS_READ,
+  BACKEND_PERMISSIONS.MARKET_DATA_READ,
+  BACKEND_PERMISSIONS.AI_ANALYSIS_READ,
+  BACKEND_PERMISSIONS.AUDIT_LOGS_READ,
+  BACKEND_PERMISSIONS.USERS_READ,
+  BACKEND_PERMISSIONS.ROLES_READ,
+  BACKEND_PERMISSIONS.EXCHANGE_READ,
+  BACKEND_PERMISSIONS.RISK_READ
+);
 
 // Helper function to check if a permission exists in a list
 function hasPermission(
@@ -466,6 +493,130 @@ describe('Property 1: RBAC Enforcement Consistency', () => {
                 action
               );
               expect(stillHasAccess).toBe(true);
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * Backend Permission Tests
+   * Requirements: 6.7, 6.9 - Match backend permission definitions, use roles from JWT claims
+   */
+  describe('Backend Permission Checking', () => {
+    // Helper function to check if a backend permission exists
+    function hasBackendPermission(
+      permissions: BackendPermission[],
+      permission: BackendPermission
+    ): boolean {
+      // Wildcard grants all permissions
+      if (permissions.includes(BACKEND_PERMISSIONS.ALL)) {
+        return true;
+      }
+      return permissions.includes(permission);
+    }
+
+    it('getBackendPermissionsForRoles should return correct permissions for each role', () => {
+      fc.assert(
+        fc.property(
+          systemRoleArbitrary,
+          (role) => {
+            const permissions = getBackendPermissionsForRoles([role]);
+            const expectedPermissions = ROLE_BACKEND_PERMISSIONS[role as keyof typeof ROLE_BACKEND_PERMISSIONS];
+            
+            // For SUPER_ADMIN, should have wildcard
+            if (role === SYSTEM_ROLES.SUPER_ADMIN) {
+              expect(permissions).toContain(BACKEND_PERMISSIONS.ALL);
+            } else {
+              // Should have all expected permissions
+              for (const expected of expectedPermissions) {
+                expect(permissions).toContain(expected);
+              }
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('SUPER_ADMIN should have wildcard permission', () => {
+      const permissions = getBackendPermissionsForRoles([SYSTEM_ROLES.SUPER_ADMIN]);
+      expect(permissions).toContain(BACKEND_PERMISSIONS.ALL);
+      expect(permissions.length).toBe(1);
+    });
+
+    it('combining roles should merge their permissions', () => {
+      fc.assert(
+        fc.property(
+          fc.array(systemRoleArbitrary, { minLength: 1, maxLength: 3 }),
+          (roles) => {
+            // Skip if SUPER_ADMIN is included (it has wildcard)
+            if (roles.includes(SYSTEM_ROLES.SUPER_ADMIN)) {
+              const permissions = getBackendPermissionsForRoles(roles);
+              expect(permissions).toContain(BACKEND_PERMISSIONS.ALL);
+              return;
+            }
+
+            const combinedPermissions = getBackendPermissionsForRoles(roles);
+            
+            // Each role's permissions should be in the combined set
+            for (const role of roles) {
+              const rolePermissions = ROLE_BACKEND_PERMISSIONS[role as keyof typeof ROLE_BACKEND_PERMISSIONS];
+              for (const perm of rolePermissions) {
+                expect(combinedPermissions).toContain(perm);
+              }
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('backend permissions should not have duplicates', () => {
+      fc.assert(
+        fc.property(
+          fc.array(systemRoleArbitrary, { minLength: 1, maxLength: 5 }),
+          (roles) => {
+            const permissions = getBackendPermissionsForRoles(roles);
+            const uniquePermissions = new Set(permissions);
+            expect(permissions.length).toBe(uniquePermissions.size);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('empty roles should return empty permissions', () => {
+      const permissions = getBackendPermissionsForRoles([]);
+      expect(permissions.length).toBe(0);
+    });
+
+    it('wildcard permission should grant access to any permission', () => {
+      fc.assert(
+        fc.property(
+          backendPermissionArbitrary,
+          (permission) => {
+            const hasAccess = hasBackendPermission([BACKEND_PERMISSIONS.ALL], permission);
+            expect(hasAccess).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('permission check should be deterministic', () => {
+      fc.assert(
+        fc.property(
+          fc.array(systemRoleArbitrary, { minLength: 1, maxLength: 3 }),
+          (roles) => {
+            const permissions1 = getBackendPermissionsForRoles(roles);
+            const permissions2 = getBackendPermissionsForRoles(roles);
+            
+            expect(permissions1.length).toBe(permissions2.length);
+            for (const perm of permissions1) {
+              expect(permissions2).toContain(perm);
             }
           }
         ),

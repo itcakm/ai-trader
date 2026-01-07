@@ -55,6 +55,11 @@ output "audit_role_arn" {
   value       = aws_iam_role.lambda_execution["audit"].arn
 }
 
+output "auth_role_arn" {
+  description = "ARN of the auth Lambda execution role"
+  value       = aws_iam_role.lambda_execution["auth"].arn
+}
+
 #------------------------------------------------------------------------------
 # Service Role Outputs
 #------------------------------------------------------------------------------

@@ -127,7 +127,7 @@ export class SantimentSentimentAdapter extends BaseSentimentAdapter {
       throw new Error(`Santiment API error: ${response.status}`);
     }
 
-    const result: SantimentGraphQLResponse<T> = await response.json();
+    const result = await response.json() as SantimentGraphQLResponse<T>;
     if (result.errors && result.errors.length > 0) {
       throw new Error(`Santiment GraphQL error: ${result.errors[0].message}`);
     }

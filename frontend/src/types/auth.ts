@@ -107,7 +107,7 @@ export interface AuthState {
   error: string | null;
 }
 
-// Auth Context Value with SSO session setter
+// Auth Context Value with SSO session setter and token helper
 export interface AuthContextValue extends AuthState {
   login: (credentials: Credentials) => Promise<void>;
   loginWithSSO: (providerId: string) => Promise<void>;
@@ -116,6 +116,12 @@ export interface AuthContextValue extends AuthState {
   refreshSession: () => Promise<void>;
   verifyMFA: (code: string) => Promise<void>;
   clearError: () => void;
+  /**
+   * Get current valid access token, auto-refreshing if needed
+   * Returns null if not authenticated
+   * Requirements: 8.2
+   */
+  getAccessToken: () => Promise<string | null>;
 }
 
 // Session expiry callback type

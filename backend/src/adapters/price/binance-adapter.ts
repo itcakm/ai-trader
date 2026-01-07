@@ -269,7 +269,7 @@ export class BinancePriceAdapter extends BasePriceAdapter {
       throw new Error(`Binance API error: ${response.status}`);
     }
 
-    const klines: BinanceRestKline[] = await response.json();
+    const klines = await response.json() as BinanceRestKline[];
     
     return klines.map(kline => this.normalizeRestKline(symbol, kline));
   }
@@ -306,7 +306,15 @@ export class BinancePriceAdapter extends BasePriceAdapter {
       throw new Error(`Binance API error: ${response.status}`);
     }
 
-    const ticker = await response.json();
+    const ticker = await response.json() as {
+      openPrice: string;
+      highPrice: string;
+      lowPrice: string;
+      lastPrice: string;
+      volume: string;
+      quoteVolume: string;
+      count: number;
+    };
     const now = new Date().toISOString();
 
     const rawOHLCV: RawOHLCV = {

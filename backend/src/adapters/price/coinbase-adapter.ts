@@ -272,7 +272,7 @@ export class CoinbasePriceAdapter extends BasePriceAdapter {
       throw new Error(`Coinbase API error: ${response.status}`);
     }
 
-    const candles: CoinbaseCandle[] = await response.json();
+    const candles = await response.json() as CoinbaseCandle[];
     
     // Coinbase returns candles in reverse chronological order
     return candles
@@ -321,8 +321,8 @@ export class CoinbasePriceAdapter extends BasePriceAdapter {
       throw new Error(`Coinbase API error: ticker=${tickerResponse.status}, stats=${statsResponse.status}`);
     }
 
-    const ticker = await tickerResponse.json();
-    const stats = await statsResponse.json();
+    const ticker = await tickerResponse.json() as { time?: string; price: string };
+    const stats = await statsResponse.json() as { open: string; high: string; low: string; volume: string };
 
     const rawOHLCV: RawOHLCV = {
       symbol,

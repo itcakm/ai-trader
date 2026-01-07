@@ -141,7 +141,7 @@ output "log_group_arn" {
 #------------------------------------------------------------------------------
 output "cloudwatch_role_arn" {
   description = "ARN of the CloudWatch IAM role"
-  value       = aws_iam_role.api_gateway_cloudwatch.arn
+  value       = var.create_cloudwatch_role ? aws_iam_role.api_gateway_cloudwatch[0].arn : var.existing_cloudwatch_role_arn
 }
 
 #------------------------------------------------------------------------------
@@ -166,4 +166,26 @@ output "api_endpoint" {
 output "api_endpoint_regional" {
   description = "Regional API endpoint URL (without custom domain)"
   value       = aws_api_gateway_stage.main.invoke_url
+}
+
+#------------------------------------------------------------------------------
+# Auth Resource Outputs
+#------------------------------------------------------------------------------
+output "auth_resource_id" {
+  description = "Resource ID of the /auth path"
+  value       = aws_api_gateway_resource.auth.id
+}
+
+output "auth_resource_ids" {
+  description = "Map of auth resource IDs by path"
+  value = merge(
+    { "auth" = aws_api_gateway_resource.auth.id },
+    { for k, v in aws_api_gateway_resource.auth_level2 : "auth/${k}" => v.id },
+    { for k, v in aws_api_gateway_resource.auth_mfa_level3 : "auth/mfa/${k}" => v.id },
+    {
+      "auth/sso/providers"     = aws_api_gateway_resource.auth_sso_providers.id
+      "auth/sso/initiate/{id}" = aws_api_gateway_resource.auth_sso_initiate_id.id
+      "auth/sso/callback"      = aws_api_gateway_resource.auth_sso_callback.id
+    }
+  )
 }

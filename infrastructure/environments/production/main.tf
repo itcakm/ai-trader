@@ -311,6 +311,11 @@ module "api_gateway" {
   # API keys
   enable_api_keys = true
 
+  # Auth Lambda configuration
+  # Will be populated when auth Lambda is deployed
+  auth_lambda_invoke_arn    = var.auth_lambda_invoke_arn
+  auth_lambda_function_name = var.auth_lambda_function_name
+
   tags = {
     Owner      = var.owner
     CostCenter = var.cost_center
@@ -504,6 +509,50 @@ module "budgets" {
 
   # Cost allocation tags enabled
   enable_cost_allocation_tags = true
+
+  tags = {
+    Owner      = var.owner
+    CostCenter = var.cost_center
+  }
+}
+
+#------------------------------------------------------------------------------
+# Cognito Module
+# Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10
+# Creates Cognito User Pool and App Client for authentication
+# Production: SES integration enabled for email delivery
+#------------------------------------------------------------------------------
+module "cognito" {
+  source = "../../modules/cognito"
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  # Password policy - Requirements 1.1
+  password_minimum_length    = 12
+  password_require_lowercase = true
+  password_require_uppercase = true
+  password_require_numbers   = true
+  password_require_symbols   = true
+
+  # MFA configuration - Requirements 1.2
+  mfa_configuration = "OPTIONAL"
+
+  # Token validity - Requirements 1.5
+  access_token_validity_hours = 1
+  id_token_validity_hours     = 1
+  refresh_token_validity_days = 30
+
+  # Email configuration - Requirements 1.9
+  # Use SES for production environment
+  domain           = var.domain_name
+  ses_identity_arn = var.ses_identity_arn
+
+  # Lambda triggers - Requirements 1.8
+  # Enable when Lambda triggers are deployed
+  enable_lambda_triggers       = var.enable_cognito_lambda_triggers
+  pre_signup_lambda_arn        = var.cognito_pre_signup_lambda_arn
+  post_confirmation_lambda_arn = var.cognito_post_confirmation_lambda_arn
 
   tags = {
     Owner      = var.owner

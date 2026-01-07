@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { 
   DeploymentService, 
   DeploymentValidationError, 
@@ -9,6 +9,11 @@ import {
 import { ResourceNotFoundError } from '../db/access';
 import { ValidationError } from '../types/validation';
 import { DeploymentConfig, DeploymentState } from '../types/deployment';
+import { 
+  requireTenantIsolation, 
+  TenantIsolatedEvent,
+  createTenantScopedResponse 
+} from '../middleware/tenant-isolation';
 
 /**
  * Error response body structure
@@ -40,7 +45,7 @@ interface UpdateStateRequest {
 const CORS_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Tenant-Id',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
 };
 
@@ -84,13 +89,6 @@ function errorResponse(
 }
 
 /**
- * Extract tenant ID from request headers
- */
-function getTenantId(event: APIGatewayProxyEvent): string | null {
-  return event.headers['X-Tenant-Id'] || event.headers['x-tenant-id'] || null;
-}
-
-/**
  * Parse JSON body safely
  */
 function parseBody<T>(event: APIGatewayProxyEvent): T | null {
@@ -106,17 +104,16 @@ function parseBody<T>(event: APIGatewayProxyEvent): T | null {
  * POST /deployments
  * 
  * Create a new deployment for a strategy.
+ * Tenant ID is automatically extracted from JWT.
  * 
- * Requirements: 4.1, 4.5
+ * Requirements: 4.1, 4.5, 5.4, 5.6
  */
 export async function createDeployment(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const body = parseBody<CreateDeploymentRequest>(event);
     if (!body) {
@@ -158,7 +155,7 @@ export async function createDeployment(
       body.riskControls
     );
 
-    return successResponse(deployment, 201);
+    return createTenantScopedResponse(deployment, tenantId, 201);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -183,22 +180,23 @@ export async function createDeployment(
  * GET /deployments
  * 
  * List all deployments for the tenant.
+ * Tenant ID is automatically extracted from JWT.
+ * 
+ * Requirements: 5.2
  */
 export async function listDeployments(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     // Optional filter by strategyId
     const strategyId = event.queryStringParameters?.strategyId;
 
     const deployments = await DeploymentService.listDeployments(tenantId, strategyId);
 
-    return successResponse({ deployments });
+    return createTenantScopedResponse({ deployments }, tenantId);
   } catch (error) {
     console.error('Error listing deployments:', error);
     return errorResponse(500, 'Internal server error', 'INTERNAL_ERROR');
@@ -209,15 +207,16 @@ export async function listDeployments(
  * GET /deployments/{id}
  * 
  * Get a specific deployment by ID.
+ * Tenant ID is automatically extracted from JWT.
+ * 
+ * Requirements: 5.2, 5.3
  */
 export async function getDeployment(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const deploymentId = event.pathParameters?.id;
     if (!deploymentId) {
@@ -226,7 +225,7 @@ export async function getDeployment(
 
     const deployment = await DeploymentService.getDeployment(tenantId, deploymentId);
 
-    return successResponse(deployment);
+    return createTenantScopedResponse(deployment, tenantId);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -240,17 +239,16 @@ export async function getDeployment(
  * PATCH /deployments/{id}/state
  * 
  * Update deployment state.
+ * Tenant ID is automatically extracted from JWT.
  * 
- * Requirements: 4.6, 4.7
+ * Requirements: 4.6, 4.7, 5.2, 5.3
  */
 export async function updateDeploymentState(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const deploymentId = event.pathParameters?.id;
     if (!deploymentId) {
@@ -284,7 +282,7 @@ export async function updateDeploymentState(
       body.state
     );
 
-    return successResponse(deployment);
+    return createTenantScopedResponse(deployment, tenantId);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -298,20 +296,11 @@ export async function updateDeploymentState(
 }
 
 /**
- * Main handler that routes requests based on HTTP method and path
+ * Internal handler that routes requests based on HTTP method and path
  */
-export async function handler(
-  event: APIGatewayProxyEvent
+async function routeRequest(
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
-  // Handle CORS preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
-      body: ''
-    };
-  }
-
   const path = event.path;
   const method = event.httpMethod;
 
@@ -336,4 +325,28 @@ export async function handler(
   }
 
   return errorResponse(404, 'Route not found', 'NOT_FOUND');
+}
+
+/**
+ * Main handler that routes requests based on HTTP method and path
+ * Wrapped with requireTenantIsolation for JWT-based tenant isolation
+ * 
+ * Requirements: 5.1, 5.4
+ */
+export async function handler(
+  event: APIGatewayProxyEvent,
+  context: Context
+): Promise<APIGatewayProxyResult> {
+  // Handle CORS preflight (no auth required)
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: CORS_HEADERS,
+      body: ''
+    };
+  }
+
+  // Apply tenant isolation middleware
+  const isolatedHandler = requireTenantIsolation(routeRequest);
+  return isolatedHandler(event, context);
 }

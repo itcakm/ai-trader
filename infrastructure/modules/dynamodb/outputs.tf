@@ -88,6 +88,19 @@ output "kill_switch_state_table_arn" {
 }
 
 #------------------------------------------------------------------------------
+# Auth Audit Table Outputs (Requirements: 11.9)
+#------------------------------------------------------------------------------
+output "auth_audit_table_name" {
+  description = "Name of the auth-audit table"
+  value       = aws_dynamodb_table.tables["auth-audit"].name
+}
+
+output "auth_audit_table_arn" {
+  description = "ARN of the auth-audit table"
+  value       = aws_dynamodb_table.tables["auth-audit"].arn
+}
+
+#------------------------------------------------------------------------------
 # Stream ARNs (for tables with streams enabled)
 #------------------------------------------------------------------------------
 output "table_stream_arns" {

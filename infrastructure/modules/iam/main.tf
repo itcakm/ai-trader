@@ -37,6 +37,10 @@ locals {
       description = "Audit and reporting functions (audit, audit-packages, audit-stream, ai-traces, data-lineage, compliance-reports, trade-lifecycle, retention, snapshots)"
       functions   = ["audit", "audit-packages", "audit-stream", "ai-traces", "data-lineage", "compliance-reports", "trade-lifecycle", "retention", "snapshots"]
     }
+    auth = {
+      description = "Authentication functions (Cognito triggers: pre-signup, post-confirmation, post-authentication)"
+      functions   = ["auth-pre-signup", "auth-post-confirmation", "auth-post-authentication"]
+    }
   }
 }
 

@@ -273,6 +273,92 @@ resource "aws_wafv2_web_acl" "api_gateway" {
     }
   }
 
+  # Rule 7: Auth Rate Limiting Rule Group (Higher Priority)
+  # Requirements: 2.1, 2.2, 2.3, 2.8, 2.9 - Rate limiting for auth endpoints
+  dynamic "rule" {
+    for_each = var.enable_auth_rate_limiting ? [1] : []
+    content {
+      name     = "AuthRateLimiting"
+      priority = 7
+
+      override_action {
+        none {}
+      }
+
+      statement {
+        rule_group_reference_statement {
+          arn = aws_wafv2_rule_group.auth_rate_limiting[0].arn
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${local.name_prefix}-auth-rate-limiting"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
+  # Rule 8: SSO Callback Allowlist (Bypass rate limiting for SSO callbacks)
+  # Requirements: 2.8 - Ensure SSO callback traffic is allowed
+  dynamic "rule" {
+    for_each = var.enable_auth_rate_limiting && length(var.sso_callback_paths) > 0 ? [1] : []
+    content {
+      name     = "SSOCallbackAllowlist"
+      priority = 8
+
+      action {
+        allow {}
+      }
+
+      statement {
+        byte_match_statement {
+          search_string         = "/auth/sso/callback"
+          positional_constraint = "STARTS_WITH"
+          field_to_match {
+            uri_path {}
+          }
+          text_transformation {
+            priority = 0
+            type     = "LOWERCASE"
+          }
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${local.name_prefix}-sso-callback-allow"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
+  # Rule 9: Auth Security Rule Group (Lower Priority than rate limiting)
+  # Requirements: 2.4, 2.5, 2.6, 2.7 - Security rules for auth endpoints
+  dynamic "rule" {
+    for_each = var.enable_auth_security_rules ? [1] : []
+    content {
+      name     = "AuthSecurity"
+      priority = 9
+
+      override_action {
+        none {}
+      }
+
+      statement {
+        rule_group_reference_statement {
+          arn = aws_wafv2_rule_group.auth_security[0].arn
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${local.name_prefix}-auth-security"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${local.name_prefix}-api-waf"

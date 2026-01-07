@@ -200,12 +200,12 @@ output "redis_port" {
 #------------------------------------------------------------------------------
 output "timestream_database_name" {
   description = "Timestream database name"
-  value       = module.timestream.database_name
+  value       = var.enable_timestream ? module.timestream[0].database_name : ""
 }
 
 output "timestream_database_arn" {
   description = "Timestream database ARN"
-  value       = module.timestream.database_arn
+  value       = var.enable_timestream ? module.timestream[0].database_arn : ""
 }
 
 #------------------------------------------------------------------------------
@@ -222,4 +222,98 @@ output "step_functions_state_machine_arns" {
 output "eventbridge_event_bus_arn" {
   description = "EventBridge custom event bus ARN"
   value       = module.eventbridge.application_event_bus_arn
+}
+
+#------------------------------------------------------------------------------
+# Route53 Outputs
+#------------------------------------------------------------------------------
+output "route53_hosted_zone_id" {
+  description = "Route53 hosted zone ID"
+  value       = module.route53.hosted_zone_id
+}
+
+output "route53_name_servers" {
+  description = "Route53 name servers (update at domain registrar)"
+  value       = module.route53.name_servers
+}
+
+output "route53_api_record_fqdn" {
+  description = "FQDN of the API Gateway A record"
+  value       = var.enable_route53_api_records ? module.route53_records[0].api_gateway_record_fqdn : null
+}
+
+output "frontend_url" {
+  description = "Frontend application URL"
+  value       = module.route53.frontend_url
+}
+
+output "api_url" {
+  description = "API URL"
+  value       = module.route53.api_url
+}
+
+#------------------------------------------------------------------------------
+# Cognito Module Outputs
+# Requirements: 1.10 - Output User Pool ID, App Client ID, and User Pool ARN
+#------------------------------------------------------------------------------
+output "cognito_user_pool_id" {
+  description = "ID of the Cognito User Pool"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_arn" {
+  description = "ARN of the Cognito User Pool"
+  value       = module.cognito.user_pool_arn
+}
+
+output "cognito_app_client_id" {
+  description = "ID of the Cognito App Client"
+  value       = module.cognito.app_client_id
+}
+
+output "cognito_user_pool_endpoint" {
+  description = "Endpoint of the Cognito User Pool"
+  value       = module.cognito.user_pool_endpoint
+}
+
+output "cognito_jwks_uri" {
+  description = "JWKS URI for JWT validation"
+  value       = module.cognito.jwks_uri
+}
+
+output "cognito_issuer" {
+  description = "Token issuer URL for JWT validation"
+  value       = module.cognito.issuer
+}
+
+#------------------------------------------------------------------------------
+# API Gateway Auth Resource Outputs
+#------------------------------------------------------------------------------
+output "api_gateway_auth_resource_ids" {
+  description = "Map of auth resource IDs by path"
+  value       = module.api_gateway.auth_resource_ids
+}
+
+#------------------------------------------------------------------------------
+# CloudFront Module Outputs
+# Requirements: 10.1, 10.6
+#------------------------------------------------------------------------------
+output "cloudfront_distribution_id" {
+  description = "ID of the CloudFront distribution"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_id : null
+}
+
+output "cloudfront_distribution_arn" {
+  description = "ARN of the CloudFront distribution"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_arn : null
+}
+
+output "cloudfront_domain_name" {
+  description = "Domain name of the CloudFront distribution"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_domain_name : null
+}
+
+output "cloudfront_hosted_zone_id" {
+  description = "Route 53 hosted zone ID for the CloudFront distribution"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_hosted_zone_id : null
 }

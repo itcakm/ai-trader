@@ -1,7 +1,10 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { KillSwitchService, AuthenticationRequiredError, KillSwitchStateError } from '../services/kill-switch';
 import { TenantAccessDeniedError } from '../db/access';
 import { KillSwitchScopeType } from '../types/kill-switch';
+import { requirePermission } from '../middleware/require-role';
+import { PERMISSIONS } from '../types/rbac';
+import { AuthenticatedEvent } from '../middleware/require-auth';
 
 /**
  * Kill Switch API Handlers
@@ -11,7 +14,7 @@ import { KillSwitchScopeType } from '../types/kill-switch';
  * - POST /kill-switch/deactivate - Deactivate the kill switch
  * - GET /kill-switch - Get current kill switch state
  * 
- * Requirements: 4.1, 4.5
+ * Requirements: 4.1, 4.5, 6.7, 6.8
  */
 
 const CORS_HEADERS = {
@@ -50,7 +53,15 @@ function errorResponse(
   };
 }
 
-function getTenantId(event: APIGatewayProxyEvent): string | null {
+function getTenantId(event: APIGatewayProxyEvent | AuthenticatedEvent): string | null {
+  // Check if this is an authenticated event with user context
+  const authEvent = event as AuthenticatedEvent;
+  if (authEvent.user?.tenantId) {
+    return authEvent.user.tenantId;
+  }
+  
+  // Fallback to header for backward compatibility (deprecated)
+  console.warn('SECURITY WARNING: Using X-Tenant-Id header instead of JWT. This is deprecated.');
   return event.headers['X-Tenant-Id'] || event.headers['x-tenant-id'] || null;
 }
 
@@ -273,10 +284,53 @@ export async function getKillSwitchConfig(
 }
 
 /**
+ * Permission-protected route handlers
+ * Requirements: 6.7, 6.8
+ */
+
+// Read operations require read:kill-switch permission
+const readKillSwitchHandler = requirePermission(
+  [PERMISSIONS.KILL_SWITCH_READ],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const path = event.path;
+    
+    if (path === '/kill-switch') {
+      return getKillSwitchState(event);
+    }
+    if (path === '/kill-switch/active') {
+      return isKillSwitchActive(event);
+    }
+    if (path === '/kill-switch/config') {
+      return getKillSwitchConfig(event);
+    }
+    return errorResponse(404, 'Route not found', 'NOT_FOUND');
+  }
+);
+
+// Activate/deactivate operations require activate:kill-switch permission
+const activateKillSwitchHandler = requirePermission(
+  [PERMISSIONS.KILL_SWITCH_ACTIVATE],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const path = event.path;
+    
+    if (path === '/kill-switch/activate') {
+      return activateKillSwitch(event);
+    }
+    if (path === '/kill-switch/deactivate') {
+      return deactivateKillSwitch(event);
+    }
+    return errorResponse(404, 'Route not found', 'NOT_FOUND');
+  }
+);
+
+/**
  * Main handler that routes requests based on HTTP method and path
+ * 
+ * Requirements: 6.7, 6.8 - Check permissions before executing operations
  */
 export async function handler(
-  event: APIGatewayProxyEvent
+  event: APIGatewayProxyEvent,
+  context: Context
 ): Promise<APIGatewayProxyResult> {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS_HEADERS, body: '' };
@@ -285,29 +339,14 @@ export async function handler(
   const path = event.path;
   const method = event.httpMethod;
 
-  // GET /kill-switch
-  if (method === 'GET' && path === '/kill-switch') {
-    return getKillSwitchState(event);
+  // GET operations require read:kill-switch permission
+  if (method === 'GET') {
+    return readKillSwitchHandler(event, context);
   }
 
-  // GET /kill-switch/active
-  if (method === 'GET' && path === '/kill-switch/active') {
-    return isKillSwitchActive(event);
-  }
-
-  // GET /kill-switch/config
-  if (method === 'GET' && path === '/kill-switch/config') {
-    return getKillSwitchConfig(event);
-  }
-
-  // POST /kill-switch/activate
-  if (method === 'POST' && path === '/kill-switch/activate') {
-    return activateKillSwitch(event);
-  }
-
-  // POST /kill-switch/deactivate
-  if (method === 'POST' && path === '/kill-switch/deactivate') {
-    return deactivateKillSwitch(event);
+  // POST operations require activate:kill-switch permission
+  if (method === 'POST') {
+    return activateKillSwitchHandler(event, context);
   }
 
   return errorResponse(404, 'Route not found', 'NOT_FOUND');

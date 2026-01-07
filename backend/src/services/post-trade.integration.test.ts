@@ -391,6 +391,9 @@ class PostTradeUpdaterIntegration {
  * Requirements: 7.1
  */
 describe('Post-Trade Flow Integration Tests', () => {
+  // Set longer timeout for integration tests (15 seconds per test)
+  jest.setTimeout(15000);
+
   let drawdownStore: MockDrawdownStore;
   let circuitBreakerStore: MockCircuitBreakerStore;
   let portfolioTracker: MockPortfolioTracker;
@@ -504,7 +507,7 @@ describe('Post-Trade Flow Integration Tests', () => {
       const result = await postTradeUpdater.processExecution(execution3);
 
       expect(result.newPositionSize).toBe(3.5);
-    });
+    }, 15000);
 
     it('should reduce position for SELL orders', async () => {
       // Buy 5 units

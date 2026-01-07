@@ -89,9 +89,11 @@ module "s3" {
 
 #------------------------------------------------------------------------------
 # Timestream Module
+# Note: Disabled by default - requires AWS support to enable for new accounts
 #------------------------------------------------------------------------------
 module "timestream" {
   source = "../../modules/timestream"
+  count  = var.enable_timestream ? 1 : 0
 
   environment  = var.environment
   project_name = var.project_name
@@ -153,10 +155,10 @@ module "iam" {
   s3_bucket_arns     = module.s3.all_bucket_arns
   enable_s3_policies = true
 
-  # Timestream ARNs
-  timestream_database_arn    = module.timestream.database_arn
-  timestream_table_arns      = module.timestream.all_table_arns_list
-  enable_timestream_policies = true
+  # Timestream ARNs - conditional based on module enablement
+  timestream_database_arn    = var.enable_timestream ? module.timestream[0].database_arn : ""
+  timestream_table_arns      = var.enable_timestream ? module.timestream[0].all_table_arns_list : []
+  enable_timestream_policies = var.enable_timestream
 
   # KMS key ARNs
   kms_key_arns        = compact([module.kms.secrets_key_arn, module.kms.s3_key_arn])
@@ -229,8 +231,8 @@ module "lambda" {
   redis_endpoint = module.elasticache.redis_primary_endpoint_address
   redis_port     = module.elasticache.redis_port
 
-  # Timestream configuration
-  timestream_database_name = module.timestream.database_name
+  # Timestream configuration - conditional
+  timestream_database_name = var.enable_timestream ? module.timestream[0].database_name : ""
 
   # Secrets ARNs
   secrets_arns = merge(
@@ -243,6 +245,10 @@ module "lambda" {
   log_retention_days             = var.log_retention_days
   enable_provisioned_concurrency = var.enable_provisioned_concurrency
 
+  # Auth functions will be deployed after backend packages are created
+  # Run deploy-backend.sh first to create auth-*.zip packages in S3
+  excluded_functions = []
+
   tags = {
     Owner      = var.owner
     CostCenter = var.cost_center
@@ -253,7 +259,41 @@ module "lambda" {
 
 
 #------------------------------------------------------------------------------
+# Route53 Module - Hosted Zone
+# Requirements: 18.1
+# Note: Creates hosted zone first for ACM DNS validation
+#------------------------------------------------------------------------------
+module "route53" {
+  source = "../../modules/route53"
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  domain_name     = var.domain_name
+  api_domain_name = var.api_domain_name
+
+  create_hosted_zone = true
+
+  # Disable all records - will be created by route53_records after API Gateway and CloudFront
+  create_cloudfront_record  = false
+  create_www_record         = false
+  create_api_gateway_record = false
+
+  # Health checks - disabled for test environment
+  enable_health_checks = false
+  enable_failover      = false
+  enable_dnssec        = false
+
+  tags = {
+    Owner      = var.owner
+    CostCenter = var.cost_center
+  }
+}
+
+#------------------------------------------------------------------------------
 # ACM Module
+# Note: Apply Route53 first (terraform apply -target=module.route53), then
+# run full apply to create DNS validation records
 #------------------------------------------------------------------------------
 module "acm" {
   source = "../../modules/acm"
@@ -264,14 +304,18 @@ module "acm" {
   domain_name     = var.domain_name
   api_domain_name = var.api_domain_name
 
-  # DNS validation - set to false if Route53 zone doesn't exist yet
-  create_route53_records = false
-  wait_for_validation    = false
+  # DNS validation using Route53 hosted zone
+  # Set to true after Route53 hosted zone is created
+  create_route53_records = var.enable_acm_dns_validation
+  route53_zone_id        = var.enable_acm_dns_validation ? module.route53.hosted_zone_id : ""
+  wait_for_validation    = var.enable_acm_dns_validation
 
   tags = {
     Owner      = var.owner
     CostCenter = var.cost_center
   }
+
+  depends_on = [module.route53]
 }
 
 #------------------------------------------------------------------------------
@@ -306,8 +350,17 @@ module "api_gateway" {
   enable_execution_logging = true
   logging_level            = "INFO"
 
+  # API Gateway CloudWatch role - use existing role
+  create_cloudwatch_role       = false
+  existing_cloudwatch_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/crypto-trading-test-api-gateway-cloudwatch"
+
   # API keys
   enable_api_keys = true
+
+  # Auth Lambda configuration
+  # Will be populated when auth Lambda is deployed
+  auth_lambda_invoke_arn    = var.auth_lambda_invoke_arn
+  auth_lambda_function_name = var.auth_lambda_function_name
 
   tags = {
     Owner      = var.owner
@@ -341,8 +394,8 @@ module "waf" {
   enable_sql_injection_protection = var.enable_sql_injection_protection
   enable_xss_protection           = var.enable_xss_protection
 
-  # CloudFront WAF - disabled for test environment (requires CloudFront module)
-  create_cloudfront_waf = false
+  # CloudFront WAF - enabled when CloudFront is enabled
+  create_cloudfront_waf = var.enable_cloudfront
 
   # API Gateway association
   associate_api_gateway = true
@@ -358,6 +411,58 @@ module "waf" {
   }
 
   depends_on = [module.api_gateway]
+}
+
+#------------------------------------------------------------------------------
+# CloudFront Module
+# Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.9
+# Creates CloudFront distribution for serving frontend from S3
+#------------------------------------------------------------------------------
+module "cloudfront" {
+  source = "../../modules/cloudfront"
+  count  = var.enable_cloudfront ? 1 : 0
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  # S3 Origin Configuration
+  s3_bucket_id                   = module.s3.frontend_assets_bucket_id
+  s3_bucket_arn                  = module.s3.frontend_assets_bucket_arn
+  s3_bucket_regional_domain_name = module.s3.frontend_assets_bucket_domain_name
+
+  # Let CloudFront manage the S3 bucket policy for OAI access
+  manage_s3_bucket_policy = true
+
+  # Domain and Certificate Configuration
+  domain_name         = var.domain_name
+  acm_certificate_arn = module.acm.frontend_validated_certificate_arn
+
+  # WAF Integration
+  waf_web_acl_arn = module.waf.cloudfront_web_acl_arn
+
+  # Cache Configuration - use defaults for static assets (1 year) and dynamic (no cache)
+  default_ttl       = 86400      # 1 day for HTML
+  max_ttl           = 31536000   # 1 year
+  static_assets_ttl = 31536000   # 1 year for _next/static/*
+
+  # Compression enabled
+  enable_compression = true
+
+  # Logging - disabled for test environment to reduce costs
+  enable_logging = false
+
+  # Price class - use cheapest for test
+  price_class = var.cloudfront_price_class
+
+  # Geographic restrictions - none for test
+  geo_restriction_type = "none"
+
+  tags = {
+    Owner      = var.owner
+    CostCenter = var.cost_center
+  }
+
+  depends_on = [module.acm, module.s3, module.waf]
 }
 
 #------------------------------------------------------------------------------
@@ -465,10 +570,60 @@ module "backup" {
 #------------------------------------------------------------------------------
 # Budgets Module
 # Requirements: 23.1, 23.2, 23.3, 23.4
-# Note: Service-specific budgets disabled for test environment
+# Note: Disabled by default for test - requires notification emails
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Route53 Records Module - API Gateway and CloudFront A Records
+# Requirements: 18.3
+# Note: Creates A records for API Gateway and CloudFront after they're created
+# Set enable_route53_api_records=true after API Gateway is deployed
+#------------------------------------------------------------------------------
+module "route53_records" {
+  source = "../../modules/route53"
+  count  = var.enable_route53_api_records ? 1 : 0
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  domain_name     = var.domain_name
+  api_domain_name = var.api_domain_name
+
+  # Use existing hosted zone
+  create_hosted_zone = false
+  hosted_zone_id     = module.route53.hosted_zone_id
+
+  # CloudFront records - enabled when CloudFront is enabled
+  create_cloudfront_record       = var.enable_cloudfront
+  create_www_record              = var.enable_cloudfront
+  cloudfront_domain_name         = var.enable_cloudfront ? module.cloudfront[0].distribution_domain_name : ""
+  cloudfront_hosted_zone_id      = var.enable_cloudfront ? module.cloudfront[0].distribution_hosted_zone_id : ""
+
+  # API Gateway records
+  create_api_gateway_record  = true
+  api_gateway_domain_name    = module.api_gateway.regional_domain_name
+  api_gateway_hosted_zone_id = module.api_gateway.regional_zone_id
+
+  # Health checks - disabled for test environment
+  enable_health_checks = false
+  enable_failover      = false
+  enable_dnssec        = false
+
+  tags = {
+    Owner      = var.owner
+    CostCenter = var.cost_center
+  }
+
+  depends_on = [module.api_gateway, module.route53, module.cloudfront]
+}
+
+#------------------------------------------------------------------------------
+# Budgets Module
+# Requirements: 23.1, 23.2, 23.3, 23.4
+# Note: Disabled by default for test - requires notification emails
 #------------------------------------------------------------------------------
 module "budgets" {
   source = "../../modules/budgets"
+  count  = var.enable_budgets && length(var.budget_notification_emails) > 0 ? 1 : 0
 
   environment  = var.environment
   project_name = var.project_name
@@ -489,6 +644,49 @@ module "budgets" {
 
   # Cost allocation tags enabled
   enable_cost_allocation_tags = true
+
+  tags = {
+    Owner      = var.owner
+    CostCenter = var.cost_center
+  }
+}
+
+#------------------------------------------------------------------------------
+# Cognito Module
+# Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10
+# Creates Cognito User Pool and App Client for authentication
+#------------------------------------------------------------------------------
+module "cognito" {
+  source = "../../modules/cognito"
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  # Password policy - Requirements 1.1
+  password_minimum_length    = 12
+  password_require_lowercase = true
+  password_require_uppercase = true
+  password_require_numbers   = true
+  password_require_symbols   = true
+
+  # MFA configuration - Requirements 1.2
+  mfa_configuration = "OPTIONAL"
+
+  # Token validity - Requirements 1.5
+  access_token_validity_hours = 1
+  id_token_validity_hours     = 1
+  refresh_token_validity_days = 30
+
+  # Email configuration - Requirements 1.9
+  # Use Cognito default for test environment
+  domain           = var.domain_name
+  ses_identity_arn = ""
+
+  # Lambda triggers - Requirements 1.8
+  # Disabled for test environment until Lambda triggers are deployed
+  enable_lambda_triggers       = false
+  pre_signup_lambda_arn        = ""
+  post_confirmation_lambda_arn = ""
 
   tags = {
     Owner      = var.owner
@@ -525,8 +723,8 @@ module "cicd" {
   # Lambda function ARNs for deployment permissions
   lambda_function_arns = module.lambda.all_function_arns_list
 
-  # CloudFront distribution ARN for cache invalidation (null for test - no CloudFront)
-  cloudfront_distribution_arn = null
+  # CloudFront distribution ARN for cache invalidation
+  cloudfront_distribution_arn = var.enable_cloudfront ? module.cloudfront[0].distribution_arn : null
 
   # Logging configuration
   log_retention_days = var.log_retention_days
@@ -536,5 +734,5 @@ module "cicd" {
     CostCenter = var.cost_center
   }
 
-  depends_on = [module.s3, module.lambda]
+  depends_on = [module.s3, module.lambda, module.cloudfront]
 }

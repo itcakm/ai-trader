@@ -1,8 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { createSnapshotService, DataProviders } from '../services/snapshot';
-import { SnapshotCacheService } from '../services/snapshot-cache';
-import { SnapshotOptions } from '../types/snapshot';
+import { createInMemoryCache, SnapshotCache } from '../services/snapshot-cache';
+import { SnapshotOptions, MarketDataSnapshot } from '../types/snapshot';
 import { ValidationError } from '../types/validation';
+
+// Create a singleton cache instance
+const snapshotCache: SnapshotCache = createInMemoryCache();
 
 /**
  * Error response body structure
@@ -164,7 +167,7 @@ export async function getSnapshot(
 
     // Try to get cached snapshot first
     if (useCache) {
-      const cachedSnapshot = SnapshotCacheService.get(symbol, timeframe);
+      const cachedSnapshot = await snapshotCache.get(symbol, timeframe);
       if (cachedSnapshot) {
         return successResponse({
           ...cachedSnapshot,
@@ -178,7 +181,7 @@ export async function getSnapshot(
     const snapshot = await snapshotService.assembleSnapshot(symbol, timeframe, options);
 
     // Cache the snapshot
-    SnapshotCacheService.set(symbol, timeframe, snapshot);
+    await snapshotCache.set(snapshot);
 
     return successResponse({
       ...snapshot,
@@ -211,7 +214,7 @@ export async function invalidateSnapshotCache(
       return errorResponse(400, 'Missing symbol', 'MISSING_PARAMETER');
     }
 
-    SnapshotCacheService.invalidate(symbol);
+    await snapshotCache.invalidate(symbol);
 
     return successResponse({ message: `Cache invalidated for symbol: ${symbol}` });
   } catch (error) {
@@ -245,7 +248,7 @@ export async function getSnapshotQuality(
     const timeframe = queryParams.timeframe || '1h';
 
     // Get cached snapshot or assemble new one
-    let snapshot = SnapshotCacheService.get(symbol, timeframe);
+    let snapshot: MarketDataSnapshot | null = await snapshotCache.get(symbol, timeframe);
     
     if (!snapshot) {
       const snapshotService = createSnapshotService(defaultDataProviders);

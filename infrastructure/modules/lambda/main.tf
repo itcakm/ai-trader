@@ -10,6 +10,12 @@ locals {
     Project     = var.project_name
     ManagedBy   = "terraform"
   })
+
+  # Filter out excluded functions
+  active_functions = {
+    for k, v in local.functions : k => v
+    if !contains(var.excluded_functions, k)
+  }
 }
 
 # Get current AWS account and region
@@ -21,7 +27,7 @@ data "aws_region" "current" {}
 # Requirements: 6.7
 #------------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "lambda" {
-  for_each = local.functions
+  for_each = local.active_functions
 
   name              = "/aws/lambda/${local.name_prefix}-${each.key}"
   retention_in_days = var.log_retention_days
@@ -37,7 +43,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 # Requirements: 6.1, 6.2, 6.3, 6.4
 #------------------------------------------------------------------------------
 resource "aws_lambda_function" "functions" {
-  for_each = local.functions
+  for_each = local.active_functions
 
   function_name = "${local.name_prefix}-${each.key}"
   description   = each.value.description
@@ -87,9 +93,9 @@ resource "aws_lambda_function" "functions" {
       # Secrets ARNs
       { for k, v in var.secrets_arns : "SECRET_ARN_${upper(replace(k, "-", "_"))}" => v },
       # Common configuration
+      # Note: AWS_REGION is automatically provided by Lambda runtime
       {
         ENVIRONMENT = var.environment
-        AWS_REGION  = data.aws_region.current.id
         LOG_LEVEL   = var.environment == "production" ? "INFO" : "DEBUG"
       }
     )
@@ -120,7 +126,7 @@ resource "aws_lambda_function" "functions" {
 # Lambda Function Aliases (for versioning and traffic shifting)
 #------------------------------------------------------------------------------
 resource "aws_lambda_alias" "live" {
-  for_each = local.functions
+  for_each = local.active_functions
 
   name             = "live"
   description      = "Live alias for ${each.key}"
@@ -138,7 +144,10 @@ resource "aws_lambda_alias" "live" {
 # Requirements: 6.9
 #------------------------------------------------------------------------------
 resource "aws_lambda_provisioned_concurrency_config" "latency_sensitive" {
-  for_each = var.enable_provisioned_concurrency ? toset(local.latency_sensitive_functions) : toset([])
+  for_each = var.enable_provisioned_concurrency ? toset([
+    for fn in local.latency_sensitive_functions : fn 
+    if contains(keys(local.active_functions), fn)
+  ]) : toset([])
 
   function_name                     = aws_lambda_function.functions[each.key].function_name
   provisioned_concurrent_executions = var.provisioned_concurrency_count

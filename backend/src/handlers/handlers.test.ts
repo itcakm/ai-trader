@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
+import { APIGatewayProxyEvent, Context } from 'aws-lambda';
 
 /**
  * Unit tests for Lambda handler error response formatting
@@ -7,6 +7,53 @@ import { APIGatewayProxyEvent } from 'aws-lambda';
  * 
  * Requirements: 6.4
  */
+
+// Mock the middleware to bypass authentication for tests
+jest.mock('../middleware/require-role', () => ({
+  requirePermission: jest.fn((permissions, handler) => handler),
+  hasPermission: jest.fn(() => true),
+  hasAnyPermission: jest.fn(() => true),
+  hasAllPermissions: jest.fn(() => true),
+  hasAnyRole: jest.fn(() => true),
+  hasAllRoles: jest.fn(() => true),
+}));
+
+jest.mock('../middleware/tenant-isolation', () => ({
+  requireTenantIsolation: jest.fn((handler) => {
+    return async (event: any, context: any) => {
+      // Add tenant context to the event
+      const tenantId = event.headers['X-Tenant-Id'] || event.headers['x-tenant-id'];
+      if (!tenantId) {
+        return {
+          statusCode: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+            'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+          },
+          body: JSON.stringify({ error: 'Missing tenant ID', code: 'UNAUTHORIZED' })
+        };
+      }
+      const isolatedEvent = {
+        ...event,
+        tenantContext: { tenantId }
+      };
+      return handler(isolatedEvent, context);
+    };
+  }),
+  TenantIsolatedEvent: {},
+  createTenantScopedResponse: jest.fn((data, tenantId, statusCode = 200) => ({
+    statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+    },
+    body: JSON.stringify(data)
+  })),
+}));
 
 // Mock the repositories and services to avoid DynamoDB calls
 jest.mock('../repositories/template', () => ({
@@ -118,7 +165,29 @@ function createMockEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGate
   };
 }
 
+/**
+ * Helper to create a mock Lambda context
+ */
+function createMockContext(): Context {
+  return {
+    callbackWaitsForEmptyEventLoop: false,
+    functionName: 'test-function',
+    functionVersion: '1',
+    invokedFunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:test-function',
+    memoryLimitInMB: '128',
+    awsRequestId: 'test-request-id',
+    logGroupName: '/aws/lambda/test-function',
+    logStreamName: '2021/01/01/[$LATEST]test-stream',
+    getRemainingTimeInMillis: () => 30000,
+    done: () => {},
+    fail: () => {},
+    succeed: () => {},
+  };
+}
+
 describe('Lambda Handlers - Error Response Formatting', () => {
+  const mockContext = createMockContext();
+  
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -159,7 +228,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
         new ValidationFailedError('Validation failed', { valid: false, errors: validationErrors })
       );
 
-      const response = await strategiesHandler(event);
+      const response = await strategiesHandler(event, mockContext);
       const body = JSON.parse(response.body);
 
       expect(response.statusCode).toBe(400);
@@ -199,7 +268,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
           body: JSON.stringify({ name: 'Test' }) // Missing templateId
         });
 
-        const response = await strategiesHandler(event);
+        const response = await strategiesHandler(event, mockContext);
         const body = JSON.parse(response.body);
 
         expect(response.statusCode).toBe(400);
@@ -215,7 +284,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
           body: 'invalid json{'
         });
 
-        const response = await strategiesHandler(event);
+        const response = await strategiesHandler(event, mockContext);
         const body = JSON.parse(response.body);
 
         expect(response.statusCode).toBe(400);
@@ -248,7 +317,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
           })
         });
 
-        const response = await deploymentsHandler(event);
+        const response = await deploymentsHandler(event, mockContext);
         const body = JSON.parse(response.body);
 
         expect(response.statusCode).toBe(400);
@@ -264,7 +333,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
           body: JSON.stringify({ state: 'INVALID_STATE' })
         });
 
-        const response = await deploymentsHandler(event);
+        const response = await deploymentsHandler(event, mockContext);
         const body = JSON.parse(response.body);
 
         expect(response.statusCode).toBe(400);
@@ -302,7 +371,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
           new ResourceNotFoundError('Strategy', 'non-existent')
         );
 
-        const response = await strategiesHandler(event);
+        const response = await strategiesHandler(event, mockContext);
         const body = JSON.parse(response.body);
 
         expect(response.statusCode).toBe(404);
@@ -354,7 +423,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
           new InvalidStateTransitionError('STOPPED', 'RUNNING')
         );
 
-        const response = await deploymentsHandler(event);
+        const response = await deploymentsHandler(event, mockContext);
         const body = JSON.parse(response.body);
 
         expect(response.statusCode).toBe(409);
@@ -417,7 +486,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
         new DeploymentValidationError('Validation failed', { valid: false, errors: validationErrors })
       );
 
-      const response = await deploymentsHandler(event);
+      const response = await deploymentsHandler(event, mockContext);
       const body = JSON.parse(response.body);
 
       expect(response.statusCode).toBe(400);
@@ -468,7 +537,7 @@ describe('Lambda Handlers - Error Response Formatting', () => {
         updatedAt: new Date().toISOString()
       });
 
-      const response = await strategiesHandler(event);
+      const response = await strategiesHandler(event, mockContext);
 
       expect(response.statusCode).toBe(201);
     });

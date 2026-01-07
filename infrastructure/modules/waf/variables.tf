@@ -122,6 +122,133 @@ variable "allowed_ip_addresses" {
 }
 
 #------------------------------------------------------------------------------
+# Auth Rate Limiting Configuration
+# Requirements: 2.1, 2.2, 2.3, 2.9 - Rate limiting for auth endpoints
+#------------------------------------------------------------------------------
+variable "enable_auth_rate_limiting" {
+  type        = bool
+  description = "Enable auth-specific rate limiting rules"
+  default     = true
+}
+
+variable "auth_login_rate_limit" {
+  type        = number
+  description = "Rate limit for login endpoint (requests per 5 minutes per IP). Default: 100"
+  default     = 100
+}
+
+variable "auth_signup_rate_limit" {
+  type        = number
+  description = "Rate limit for signup endpoint (requests per 5 minutes per IP). Default: 10"
+  default     = 10
+}
+
+variable "auth_password_reset_rate_limit" {
+  type        = number
+  description = "Rate limit for password reset endpoints (requests per 5 minutes per IP). Minimum: 10 (AWS WAF requirement)"
+  default     = 10
+
+  validation {
+    condition     = var.auth_password_reset_rate_limit >= 10
+    error_message = "AWS WAF rate_based_statement limit must be at least 10."
+  }
+}
+
+variable "auth_email_verification_rate_limit" {
+  type        = number
+  description = "Rate limit for email verification endpoints (requests per 5 minutes per IP). Default: 20"
+  default     = 20
+}
+
+variable "auth_mfa_rate_limit" {
+  type        = number
+  description = "Rate limit for MFA endpoints (requests per 5 minutes per IP). Default: 50"
+  default     = 50
+}
+
+#------------------------------------------------------------------------------
+# Auth Security Rules Configuration
+# Requirements: 2.4, 2.5, 2.6, 2.7 - Security rules for auth endpoints
+#------------------------------------------------------------------------------
+variable "enable_auth_security_rules" {
+  type        = bool
+  description = "Enable auth-specific security rules (SQL injection, XSS, IP reputation)"
+  default     = true
+}
+
+variable "enable_auth_sql_injection_protection" {
+  type        = bool
+  description = "Enable SQL injection protection for auth endpoints"
+  default     = true
+}
+
+variable "enable_auth_xss_protection" {
+  type        = bool
+  description = "Enable XSS protection for auth endpoints"
+  default     = true
+}
+
+variable "enable_auth_ip_reputation" {
+  type        = bool
+  description = "Enable IP reputation blocking for auth endpoints"
+  default     = true
+}
+
+#------------------------------------------------------------------------------
+# SSO Configuration
+# Requirements: 2.8 - Allow SSO callback traffic
+#------------------------------------------------------------------------------
+variable "sso_callback_paths" {
+  type        = list(string)
+  description = "List of SSO callback paths to allow through rate limiting"
+  default     = ["/auth/sso/callback"]
+}
+
+#------------------------------------------------------------------------------
+# Auth WAF Logging Configuration
+# Requirements: 2.7 - Configure CloudWatch logging for blocked requests
+#------------------------------------------------------------------------------
+variable "auth_waf_log_retention_days" {
+  type        = number
+  description = "Retention period for auth WAF logs in CloudWatch (days)"
+  default     = 90
+}
+
+#------------------------------------------------------------------------------
+# Auth Security Alarms Configuration
+# Requirements: 2.7 - Monitor blocked requests
+#------------------------------------------------------------------------------
+variable "enable_auth_security_alarms" {
+  type        = bool
+  description = "Enable CloudWatch alarms for auth security events"
+  default     = true
+}
+
+variable "auth_sqli_alarm_threshold" {
+  type        = number
+  description = "Threshold for SQL injection alarm (blocked requests per 5 minutes)"
+  default     = 10
+}
+
+variable "auth_xss_alarm_threshold" {
+  type        = number
+  description = "Threshold for XSS alarm (blocked requests per 5 minutes)"
+  default     = 10
+}
+
+variable "auth_rate_limit_alarm_threshold" {
+  type        = number
+  description = "Threshold for rate limit alarm (blocked requests per 5 minutes)"
+  default     = 50
+}
+
+variable "auth_security_alarm_actions" {
+  type        = list(string)
+  description = "List of ARNs to notify when auth security alarms trigger (e.g., SNS topic ARNs)"
+  default     = []
+}
+
+#------------------------------------------------------------------------------
 # Tags
 #------------------------------------------------------------------------------
 variable "tags" {

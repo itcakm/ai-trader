@@ -177,3 +177,8 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+
+# The rest
+.hypothesis/
+*.zip

@@ -51,6 +51,17 @@ const httpStatusCodeArb = (): fc.Arbitrary<number> =>
   );
 
 /**
+ * Reserved JavaScript property names to avoid in generated error codes
+ * These can cause issues when used as object property values
+ */
+const RESERVED_PROPERTY_NAMES = [
+  'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf',
+  'propertyIsEnumerable', 'toLocaleString', 'constructor',
+  '__proto__', '__defineGetter__', '__defineSetter__',
+  '__lookupGetter__', '__lookupSetter__'
+];
+
+/**
  * Generator for error codes
  */
 const errorCodeArb = (): fc.Arbitrary<string> =>
@@ -61,8 +72,8 @@ const errorCodeArb = (): fc.Arbitrary<string> =>
     fc.constantFrom('invalid_request', 'invalid_scope', 'expired_token', 'revoked_token', 'invalid_token', 'rate_limit_exceeded', 'internal_server_error'),
     // Generic codes
     fc.constantFrom('TIMEOUT', 'NETWORK_ERROR', 'CONNECTION_RESET', 'DNS_ERROR', 'SSL_ERROR', 'INVALID_SIGNATURE', 'INSUFFICIENT_FUNDS', 'ORDER_NOT_FOUND', 'INVALID_SYMBOL', 'INVALID_QUANTITY', 'INVALID_PRICE'),
-    // Unknown codes
-    fc.string({ minLength: 1, maxLength: 20 })
+    // Unknown codes - filter out reserved property names
+    fc.string({ minLength: 1, maxLength: 20 }).filter(s => !RESERVED_PROPERTY_NAMES.includes(s))
   );
 
 /**

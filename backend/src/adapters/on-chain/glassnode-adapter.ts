@@ -308,9 +308,9 @@ export class GlassnodeAdapter extends BaseOnChainAdapter {
   }
 
   /**
-   * Infer network from symbol
+   * Infer network from symbol (override base class method)
    */
-  private inferNetwork(symbol: string): string {
+  protected override inferNetwork(symbol: string): string {
     const networkMap: Record<string, string> = {
       'BTC': 'bitcoin',
       'ETH': 'ethereum',

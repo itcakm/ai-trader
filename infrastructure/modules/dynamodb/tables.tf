@@ -623,6 +623,94 @@ locals {
         }
       ]
     }
+
+    # Authentication Tables
+    # Requirements: 11.9, 12.8
+
+    # Auth Audit Log Table - Requirements: 11.9
+    auth-audit = {
+      partition_key      = "entryId"
+      partition_key_type = "S"
+      sort_key           = "timestamp"
+      sort_key_type      = "S"
+      ttl_attribute      = "ttl"
+      gsi = [
+        {
+          name               = "userId-timestamp-index"
+          partition_key      = "userId"
+          partition_key_type = "S"
+          sort_key           = "timestamp"
+          sort_key_type      = "S"
+        },
+        {
+          name               = "tenantId-timestamp-index"
+          partition_key      = "tenantId"
+          partition_key_type = "S"
+          sort_key           = "timestamp"
+          sort_key_type      = "S"
+        },
+        {
+          name               = "event-timestamp-index"
+          partition_key      = "event"
+          partition_key_type = "S"
+          sort_key           = "timestamp"
+          sort_key_type      = "S"
+        }
+      ]
+    }
+
+    # Password History Table - Requirements: 12.8
+    password-history = {
+      partition_key      = "userId"
+      partition_key_type = "S"
+      sort_key           = "timestamp"
+      sort_key_type      = "S"
+      ttl_attribute      = "ttl"
+      gsi                = []
+    }
+
+    # Login History Table - Requirements: 12.2
+    login-history = {
+      partition_key      = "userId"
+      partition_key_type = "S"
+      sort_key           = "timestamp"
+      sort_key_type      = "S"
+      ttl_attribute      = "ttl"
+      gsi = [
+        {
+          name               = "ip-timestamp-index"
+          partition_key      = "ip"
+          partition_key_type = "S"
+          sort_key           = "timestamp"
+          sort_key_type      = "S"
+        }
+      ]
+    }
+
+    # User Profiles Table - Requirements: 1.8
+    user-profiles = {
+      partition_key      = "userId"
+      partition_key_type = "S"
+      sort_key           = null
+      sort_key_type      = null
+      ttl_attribute      = null
+      gsi = [
+        {
+          name               = "email-index"
+          partition_key      = "email"
+          partition_key_type = "S"
+          sort_key           = null
+          sort_key_type      = null
+        },
+        {
+          name               = "tenantId-index"
+          partition_key      = "tenantId"
+          partition_key_type = "S"
+          sort_key           = null
+          sort_key_type      = null
+        }
+      ]
+    }
   }
 
   # List of table names for iteration

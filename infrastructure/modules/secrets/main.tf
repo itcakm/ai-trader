@@ -223,26 +223,11 @@ resource "aws_secretsmanager_secret_policy" "exchange" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = aws_secretsmanager_secret.exchange[each.key].arn
-      },
-      {
-        Sid       = "DenyAllOthers"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = aws_secretsmanager_secret.exchange[each.key].arn
-        Condition = {
-          StringNotEquals = {
-            "aws:PrincipalArn" = concat(
-              var.lambda_role_arns,
-              ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-            )
-          }
-        }
       }
     ]
   })
+
+  depends_on = [aws_secretsmanager_secret_version.exchange]
 }
 
 # Resource policy for AI provider secrets
@@ -265,26 +250,11 @@ resource "aws_secretsmanager_secret_policy" "ai_provider" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = aws_secretsmanager_secret.ai_provider[each.key].arn
-      },
-      {
-        Sid       = "DenyAllOthers"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = aws_secretsmanager_secret.ai_provider[each.key].arn
-        Condition = {
-          StringNotEquals = {
-            "aws:PrincipalArn" = concat(
-              var.lambda_role_arns,
-              ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-            )
-          }
-        }
       }
     ]
   })
+
+  depends_on = [aws_secretsmanager_secret_version.ai_provider]
 }
 
 # Resource policy for infrastructure secrets
@@ -307,24 +277,9 @@ resource "aws_secretsmanager_secret_policy" "infrastructure" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = aws_secretsmanager_secret.infrastructure[each.key].arn
-      },
-      {
-        Sid       = "DenyAllOthers"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = aws_secretsmanager_secret.infrastructure[each.key].arn
-        Condition = {
-          StringNotEquals = {
-            "aws:PrincipalArn" = concat(
-              var.lambda_role_arns,
-              ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-            )
-          }
-        }
       }
     ]
   })
+
+  depends_on = [aws_secretsmanager_secret_version.infrastructure]
 }

@@ -55,7 +55,8 @@ output "functions_by_group" {
   description = "Map of function names grouped by function group"
   value = {
     for group in distinct(values(local.function_groups)) : group => [
-      for fn, grp in local.function_groups : aws_lambda_function.functions[fn].function_name if grp == group
+      for fn, grp in local.function_groups : aws_lambda_function.functions[fn].function_name 
+      if grp == group && contains(keys(aws_lambda_function.functions), fn)
     ]
   }
 }
@@ -64,7 +65,8 @@ output "function_arns_by_group" {
   description = "Map of function ARNs grouped by function group"
   value = {
     for group in distinct(values(local.function_groups)) : group => [
-      for fn, grp in local.function_groups : aws_lambda_function.functions[fn].arn if grp == group
+      for fn, grp in local.function_groups : aws_lambda_function.functions[fn].arn 
+      if grp == group && contains(keys(aws_lambda_function.functions), fn)
     ]
   }
 }
@@ -160,5 +162,33 @@ output "function_configurations" {
       reserved_concurrency = v.reserved_concurrent_executions
       tracing_mode         = v.tracing_config[0].mode
     }
+  }
+}
+
+#------------------------------------------------------------------------------
+# Auth Trigger Function Outputs
+# Requirements: 1.8, 12.2, 12.3, 12.4
+#------------------------------------------------------------------------------
+output "auth_pre_signup_function_arn" {
+  description = "ARN of the auth pre-signup Lambda trigger function"
+  value       = contains(keys(aws_lambda_function.functions), "auth-pre-signup") ? aws_lambda_function.functions["auth-pre-signup"].arn : null
+}
+
+output "auth_post_confirmation_function_arn" {
+  description = "ARN of the auth post-confirmation Lambda trigger function"
+  value       = contains(keys(aws_lambda_function.functions), "auth-post-confirmation") ? aws_lambda_function.functions["auth-post-confirmation"].arn : null
+}
+
+output "auth_post_authentication_function_arn" {
+  description = "ARN of the auth post-authentication Lambda trigger function"
+  value       = contains(keys(aws_lambda_function.functions), "auth-post-authentication") ? aws_lambda_function.functions["auth-post-authentication"].arn : null
+}
+
+output "auth_trigger_function_arns" {
+  description = "Map of auth trigger function ARNs (null values for excluded functions)"
+  value = {
+    pre_signup          = contains(keys(aws_lambda_function.functions), "auth-pre-signup") ? aws_lambda_function.functions["auth-pre-signup"].arn : null
+    post_confirmation   = contains(keys(aws_lambda_function.functions), "auth-post-confirmation") ? aws_lambda_function.functions["auth-post-confirmation"].arn : null
+    post_authentication = contains(keys(aws_lambda_function.functions), "auth-post-authentication") ? aws_lambda_function.functions["auth-post-authentication"].arn : null
   }
 }

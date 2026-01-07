@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import {
   ExchangeOrderManager,
   OrderNotFoundError,
@@ -20,13 +20,16 @@ import {
 } from '../types/exchange-order';
 import { ExchangeId } from '../types/exchange';
 import { generateUUID } from '../utils/uuid';
+import { requirePermission } from '../middleware/require-role';
+import { PERMISSIONS } from '../types/rbac';
+import { AuthenticatedEvent } from '../middleware/require-auth';
 
 /**
  * Exchange Order API Handlers
  *
  * Implements API endpoints for order submission, cancellation, modification, and query.
  *
- * Requirements: 5.1, 5.2, 5.3, 5.4
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 6.7, 6.8
  */
 
 const CORS_HEADERS = {
@@ -65,7 +68,15 @@ function errorResponse(
   };
 }
 
-function getTenantId(event: APIGatewayProxyEvent): string | null {
+function getTenantId(event: APIGatewayProxyEvent | AuthenticatedEvent): string | null {
+  // Check if this is an authenticated event with user context
+  const authEvent = event as AuthenticatedEvent;
+  if (authEvent.user?.tenantId) {
+    return authEvent.user.tenantId;
+  }
+  
+  // Fallback to header for backward compatibility (deprecated)
+  console.warn('SECURITY WARNING: Using X-Tenant-Id header instead of JWT. This is deprecated.');
   return event.headers['X-Tenant-Id'] || event.headers['x-tenant-id'] || null;
 }
 
@@ -549,10 +560,58 @@ export async function getOpenOrders(
 }
 
 /**
+ * Permission-protected route handlers
+ * Requirements: 6.7, 6.8
+ */
+
+// Read operations require read:orders permission
+const readOrdersHandler = requirePermission(
+  [PERMISSIONS.ORDERS_READ],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const path = event.path;
+    
+    if (path === '/orders') {
+      return listOrders(event);
+    }
+    if (path === '/orders/open') {
+      return getOpenOrders(event);
+    }
+    return getOrder(event);
+  }
+);
+
+// Execute operations require execute:orders permission
+const executeOrdersHandler = requirePermission(
+  [PERMISSIONS.ORDERS_EXECUTE],
+  async (event: AuthenticatedEvent, context: Context) => {
+    return submitOrder(event);
+  }
+);
+
+// Cancel operations require cancel:orders permission
+const cancelOrdersHandler = requirePermission(
+  [PERMISSIONS.ORDERS_CANCEL],
+  async (event: AuthenticatedEvent, context: Context) => {
+    return cancelOrder(event);
+  }
+);
+
+// Modify operations require execute:orders permission (same as submit)
+const modifyOrdersHandler = requirePermission(
+  [PERMISSIONS.ORDERS_EXECUTE],
+  async (event: AuthenticatedEvent, context: Context) => {
+    return modifyOrder(event);
+  }
+);
+
+/**
  * Main handler that routes requests based on HTTP method and path
+ * 
+ * Requirements: 6.7, 6.8 - Check permissions before executing operations
  */
 export async function handler(
-  event: APIGatewayProxyEvent
+  event: APIGatewayProxyEvent,
+  context: Context
 ): Promise<APIGatewayProxyResult> {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS_HEADERS, body: '' };
@@ -561,34 +620,24 @@ export async function handler(
   const path = event.path;
   const method = event.httpMethod;
 
-  // POST /orders
+  // POST /orders - requires execute:orders permission
   if (method === 'POST' && path === '/orders') {
-    return submitOrder(event);
+    return executeOrdersHandler(event, context);
   }
 
-  // GET /orders
-  if (method === 'GET' && path === '/orders') {
-    return listOrders(event);
+  // GET /orders, GET /orders/open, GET /orders/{orderId} - requires read:orders permission
+  if (method === 'GET') {
+    return readOrdersHandler(event, context);
   }
 
-  // GET /orders/open
-  if (method === 'GET' && path === '/orders/open') {
-    return getOpenOrders(event);
-  }
-
-  // GET /orders/{orderId}
-  if (method === 'GET' && path.match(/^\/orders\/[^/]+$/)) {
-    return getOrder(event);
-  }
-
-  // DELETE /orders/{orderId}
+  // DELETE /orders/{orderId} - requires cancel:orders permission
   if (method === 'DELETE' && path.match(/^\/orders\/[^/]+$/)) {
-    return cancelOrder(event);
+    return cancelOrdersHandler(event, context);
   }
 
-  // PATCH /orders/{orderId}
+  // PATCH /orders/{orderId} - requires execute:orders permission
   if (method === 'PATCH' && path.match(/^\/orders\/[^/]+$/)) {
-    return modifyOrder(event);
+    return modifyOrdersHandler(event, context);
   }
 
   return errorResponse(404, 'Route not found', 'NOT_FOUND');

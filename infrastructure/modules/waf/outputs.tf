@@ -76,3 +76,37 @@ output "cloudfront_waf_logs_bucket_arn" {
   description = "ARN of the CloudFront WAF logs S3 bucket"
   value       = var.create_cloudfront_waf && var.enable_logging && var.create_waf_log_bucket ? aws_s3_bucket.cloudfront_waf_logs[0].arn : null
 }
+
+#------------------------------------------------------------------------------
+# Auth Rate Limiting Rule Group Outputs
+# Requirements: 2.1, 2.2, 2.3 - Auth rate limiting
+#------------------------------------------------------------------------------
+output "auth_rate_limiting_rule_group_arn" {
+  description = "ARN of the auth rate limiting rule group"
+  value       = var.enable_auth_rate_limiting ? aws_wafv2_rule_group.auth_rate_limiting[0].arn : null
+}
+
+output "auth_rate_limiting_rule_group_id" {
+  description = "ID of the auth rate limiting rule group"
+  value       = var.enable_auth_rate_limiting ? aws_wafv2_rule_group.auth_rate_limiting[0].id : null
+}
+
+output "auth_security_rule_group_arn" {
+  description = "ARN of the auth security rule group"
+  value       = var.enable_auth_security_rules ? aws_wafv2_rule_group.auth_security[0].arn : null
+}
+
+output "auth_security_rule_group_id" {
+  description = "ID of the auth security rule group"
+  value       = var.enable_auth_security_rules ? aws_wafv2_rule_group.auth_security[0].id : null
+}
+
+output "auth_waf_log_group_name" {
+  description = "Name of the CloudWatch log group for auth WAF blocked requests"
+  value       = var.enable_auth_security_rules ? aws_cloudwatch_log_group.auth_waf_blocked[0].name : null
+}
+
+output "auth_waf_log_group_arn" {
+  description = "ARN of the CloudWatch log group for auth WAF blocked requests"
+  value       = var.enable_auth_security_rules ? aws_cloudwatch_log_group.auth_waf_blocked[0].arn : null
+}

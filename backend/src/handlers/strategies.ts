@@ -1,8 +1,16 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { StrategyService, ValidationFailedError, InvalidTemplateReferenceError } from '../services/strategy';
-import { ResourceNotFoundError } from '../db/access';
+import { ResourceNotFoundError, TenantContext } from '../db/access';
 import { ValidationError } from '../types/validation';
 import { ParameterValue } from '../types/template';
+import { 
+  requireTenantIsolation, 
+  TenantIsolatedEvent,
+  createTenantScopedResponse 
+} from '../middleware/tenant-isolation';
+import { requirePermission } from '../middleware/require-role';
+import { PERMISSIONS } from '../types/rbac';
+import { AuthenticatedEvent } from '../middleware/require-auth';
 
 /**
  * Error response body structure
@@ -35,7 +43,7 @@ interface UpdateParametersRequest {
 const CORS_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Tenant-Id',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
 };
 
@@ -72,9 +80,21 @@ function errorResponse(
 }
 
 /**
- * Extract tenant ID from request headers
+ * Extract tenant ID from JWT context (NOT from headers)
+ * Requirements: 5.1, 5.4
+ * 
+ * @deprecated Use event.tenantContext.tenantId from TenantIsolatedEvent instead
  */
 function getTenantId(event: APIGatewayProxyEvent): string | null {
+  // Check if this is a tenant-isolated event with JWT context
+  const isolatedEvent = event as TenantIsolatedEvent;
+  if (isolatedEvent.tenantContext?.tenantId) {
+    return isolatedEvent.tenantContext.tenantId;
+  }
+  
+  // Fallback to header for backward compatibility (will be removed)
+  // WARNING: This should not be trusted in production
+  console.warn('SECURITY WARNING: Using X-Tenant-Id header instead of JWT. This is deprecated.');
   return event.headers['X-Tenant-Id'] || event.headers['x-tenant-id'] || null;
 }
 
@@ -94,17 +114,17 @@ function parseBody<T>(event: APIGatewayProxyEvent): T | null {
  * POST /strategies
  * 
  * Create a new strategy from a template.
+ * Tenant ID is automatically extracted from JWT.
  * 
- * Requirements: 2.1
+ * Requirements: 2.1, 5.4, 5.6
  */
 export async function createStrategy(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    // Requirements: 5.4 - Do not trust X-Tenant-Id header
+    const tenantId = event.tenantContext.tenantId;
 
     const body = parseBody<CreateStrategyRequest>(event);
     if (!body) {
@@ -123,13 +143,14 @@ export async function createStrategy(
       ]);
     }
 
+    // Requirements: 5.6 - Auto-set tenantId on resource creation
     const strategy = await StrategyService.createStrategy(
       tenantId,
       body.templateId,
       body.name
     );
 
-    return successResponse(strategy, 201);
+    return createTenantScopedResponse(strategy, tenantId, 201);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -143,21 +164,20 @@ export async function createStrategy(
  * GET /strategies
  * 
  * List all strategies for the tenant.
+ * Tenant ID is automatically extracted from JWT.
  * 
- * Requirements: 2.6
+ * Requirements: 2.6, 5.2
  */
 export async function listStrategies(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const strategies = await StrategyService.listStrategies(tenantId);
 
-    return successResponse({ strategies });
+    return createTenantScopedResponse({ strategies }, tenantId);
   } catch (error) {
     console.error('Error listing strategies:', error);
     return errorResponse(500, 'Internal server error', 'INTERNAL_ERROR');
@@ -168,17 +188,16 @@ export async function listStrategies(
  * GET /strategies/{id}
  * 
  * Get a specific strategy by ID.
+ * Tenant ID is automatically extracted from JWT.
  * 
- * Requirements: 2.6
+ * Requirements: 2.6, 5.2, 5.3
  */
 export async function getStrategy(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const strategyId = event.pathParameters?.id;
     if (!strategyId) {
@@ -187,7 +206,7 @@ export async function getStrategy(
 
     const strategy = await StrategyService.getStrategy(tenantId, strategyId);
 
-    return successResponse(strategy);
+    return createTenantScopedResponse(strategy, tenantId);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -201,17 +220,16 @@ export async function getStrategy(
  * PATCH /strategies/{id}/parameters
  * 
  * Update strategy parameters.
+ * Tenant ID is automatically extracted from JWT.
  * 
- * Requirements: 2.4
+ * Requirements: 2.4, 5.2, 5.3
  */
 export async function updateParameters(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const strategyId = event.pathParameters?.id;
     if (!strategyId) {
@@ -236,7 +254,7 @@ export async function updateParameters(
       body.changeDescription
     );
 
-    return successResponse(strategy);
+    return createTenantScopedResponse(strategy, tenantId);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -261,15 +279,16 @@ export async function updateParameters(
  * DELETE /strategies/{id}
  * 
  * Delete a strategy.
+ * Tenant ID is automatically extracted from JWT.
+ * 
+ * Requirements: 5.2, 5.3
  */
 export async function deleteStrategy(
-  event: APIGatewayProxyEvent
+  event: TenantIsolatedEvent
 ): Promise<APIGatewayProxyResult> {
   try {
-    const tenantId = getTenantId(event);
-    if (!tenantId) {
-      return errorResponse(401, 'Missing tenant ID', 'UNAUTHORIZED');
-    }
+    // Get tenant ID from JWT context (not headers)
+    const tenantId = event.tenantContext.tenantId;
 
     const strategyId = event.pathParameters?.id;
     if (!strategyId) {
@@ -280,7 +299,7 @@ export async function deleteStrategy(
     const { StrategyRepository } = await import('../repositories/strategy');
     await StrategyRepository.deleteStrategy(tenantId, strategyId);
 
-    return successResponse({ message: 'Strategy deleted successfully' });
+    return createTenantScopedResponse({ message: 'Strategy deleted successfully' }, tenantId);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) {
       return errorResponse(404, error.message, 'NOT_FOUND');
@@ -291,12 +310,101 @@ export async function deleteStrategy(
 }
 
 /**
+ * Internal handler that routes requests based on HTTP method and path
+ * This is wrapped by requireTenantIsolation for authentication and tenant isolation
+ */
+async function routeRequest(
+  event: TenantIsolatedEvent
+): Promise<APIGatewayProxyResult> {
+  const path = event.path;
+  const method = event.httpMethod;
+
+  // Route: POST /strategies - requires write:strategies permission
+  if (method === 'POST' && path === '/strategies') {
+    return createStrategy(event);
+  }
+
+  // Route: GET /strategies - requires read:strategies permission
+  if (method === 'GET' && path === '/strategies') {
+    return listStrategies(event);
+  }
+
+  // Route: PATCH /strategies/{id}/parameters - requires write:strategies permission
+  if (method === 'PATCH' && path.match(/^\/strategies\/[^/]+\/parameters$/)) {
+    return updateParameters(event);
+  }
+
+  // Route: GET /strategies/{id} - requires read:strategies permission
+  if (method === 'GET' && path.match(/^\/strategies\/[^/]+$/)) {
+    return getStrategy(event);
+  }
+
+  // Route: DELETE /strategies/{id} - requires delete:strategies permission
+  if (method === 'DELETE' && path.match(/^\/strategies\/[^/]+$/)) {
+    return deleteStrategy(event);
+  }
+
+  return errorResponse(404, 'Route not found', 'NOT_FOUND');
+}
+
+/**
+ * Permission-protected route handlers
+ * Requirements: 6.7, 6.8
+ */
+
+// Read operations require read:strategies permission
+const readStrategiesHandler = requirePermission(
+  [PERMISSIONS.STRATEGIES_READ],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const isolatedHandler = requireTenantIsolation(async (isolatedEvent: TenantIsolatedEvent) => {
+      const path = isolatedEvent.path;
+      if (path === '/strategies') {
+        return listStrategies(isolatedEvent);
+      }
+      return getStrategy(isolatedEvent);
+    });
+    return isolatedHandler(event, context);
+  }
+);
+
+// Write operations require write:strategies permission
+const writeStrategiesHandler = requirePermission(
+  [PERMISSIONS.STRATEGIES_WRITE],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const isolatedHandler = requireTenantIsolation(async (isolatedEvent: TenantIsolatedEvent) => {
+      const path = isolatedEvent.path;
+      if (path === '/strategies') {
+        return createStrategy(isolatedEvent);
+      }
+      return updateParameters(isolatedEvent);
+    });
+    return isolatedHandler(event, context);
+  }
+);
+
+// Delete operations require delete:strategies permission
+const deleteStrategiesHandler = requirePermission(
+  [PERMISSIONS.STRATEGIES_DELETE],
+  async (event: AuthenticatedEvent, context: Context) => {
+    const isolatedHandler = requireTenantIsolation(deleteStrategy);
+    return isolatedHandler(event, context);
+  }
+);
+
+/**
  * Main handler that routes requests based on HTTP method and path
+ * Wrapped with requireTenantIsolation for JWT-based tenant isolation
+ * 
+ * Requirements: 5.1, 5.4, 6.7, 6.8
+ * - Extract tenantId from JWT (not headers)
+ * - Auto-set tenantId on resource creation
+ * - Check permissions before executing operations
  */
 export async function handler(
-  event: APIGatewayProxyEvent
+  event: APIGatewayProxyEvent,
+  context: Context
 ): Promise<APIGatewayProxyResult> {
-  // Handle CORS preflight
+  // Handle CORS preflight (no auth required)
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -308,29 +416,22 @@ export async function handler(
   const path = event.path;
   const method = event.httpMethod;
 
-  // Route: POST /strategies
-  if (method === 'POST' && path === '/strategies') {
-    return createStrategy(event);
+  // Route to permission-protected handlers based on operation type
+  // Requirements: 6.7, 6.8 - Check permissions before executing operations
+
+  // Read operations (GET)
+  if (method === 'GET') {
+    return readStrategiesHandler(event, context);
   }
 
-  // Route: GET /strategies
-  if (method === 'GET' && path === '/strategies') {
-    return listStrategies(event);
+  // Write operations (POST, PATCH)
+  if (method === 'POST' || method === 'PATCH') {
+    return writeStrategiesHandler(event, context);
   }
 
-  // Route: PATCH /strategies/{id}/parameters
-  if (method === 'PATCH' && path.match(/^\/strategies\/[^/]+\/parameters$/)) {
-    return updateParameters(event);
-  }
-
-  // Route: GET /strategies/{id}
-  if (method === 'GET' && path.match(/^\/strategies\/[^/]+$/)) {
-    return getStrategy(event);
-  }
-
-  // Route: DELETE /strategies/{id}
-  if (method === 'DELETE' && path.match(/^\/strategies\/[^/]+$/)) {
-    return deleteStrategy(event);
+  // Delete operations (DELETE)
+  if (method === 'DELETE') {
+    return deleteStrategiesHandler(event, context);
   }
 
   return errorResponse(404, 'Route not found', 'NOT_FOUND');

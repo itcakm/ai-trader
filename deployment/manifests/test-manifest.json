@@ -1,0 +1,674 @@
+{
+  "account_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "383056423849"
+  },
+  "ai_provider_secret_arns": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "deepseek": "string",
+        "gemini": "string",
+        "openai": "string"
+      }
+    ],
+    "value": {
+      "deepseek": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-ai-deepseek-T1Im7a",
+      "gemini": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-ai-gemini-T1Im7a",
+      "openai": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-ai-openai-Q7nQ5d"
+    }
+  },
+  "all_bucket_arns": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "audit-logs": "string",
+        "frontend-assets": "string",
+        "lambda-deployments": "string",
+        "model-outputs": "string",
+        "prompt-templates": "string"
+      }
+    ],
+    "value": {
+      "audit-logs": "arn:aws:s3:::crypto-trading-test-audit-logs-383056423849",
+      "frontend-assets": "arn:aws:s3:::crypto-trading-test-frontend-assets-383056423849",
+      "lambda-deployments": "arn:aws:s3:::crypto-trading-test-lambda-deployments-383056423849",
+      "model-outputs": "arn:aws:s3:::crypto-trading-test-model-outputs-383056423849",
+      "prompt-templates": "arn:aws:s3:::crypto-trading-test-prompt-templates-383056423849"
+    }
+  },
+  "all_bucket_names": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "audit-logs": "string",
+        "frontend-assets": "string",
+        "lambda-deployments": "string",
+        "model-outputs": "string",
+        "prompt-templates": "string"
+      }
+    ],
+    "value": {
+      "audit-logs": "crypto-trading-test-audit-logs-383056423849",
+      "frontend-assets": "crypto-trading-test-frontend-assets-383056423849",
+      "lambda-deployments": "crypto-trading-test-lambda-deployments-383056423849",
+      "model-outputs": "crypto-trading-test-model-outputs-383056423849",
+      "prompt-templates": "crypto-trading-test-prompt-templates-383056423849"
+    }
+  },
+  "api_gateway_auth_resource_ids": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "auth": "string",
+        "auth/change-password": "string",
+        "auth/forgot-password": "string",
+        "auth/login": "string",
+        "auth/logout": "string",
+        "auth/me": "string",
+        "auth/mfa/challenge": "string",
+        "auth/mfa/setup": "string",
+        "auth/mfa/verify": "string",
+        "auth/refresh": "string",
+        "auth/resend-verification": "string",
+        "auth/reset-password": "string",
+        "auth/signup": "string",
+        "auth/sso/callback": "string",
+        "auth/sso/initiate/{id}": "string",
+        "auth/sso/providers": "string",
+        "auth/verify-email": "string"
+      }
+    ],
+    "value": {
+      "auth": "azhdti",
+      "auth/change-password": "euvnd6",
+      "auth/forgot-password": "2p5wqp",
+      "auth/login": "y7nqil",
+      "auth/logout": "c2ilbz",
+      "auth/me": "1vyjyh",
+      "auth/mfa/challenge": "k2dkf4",
+      "auth/mfa/setup": "fcv0lu",
+      "auth/mfa/verify": "8imzf2",
+      "auth/refresh": "o4m02o",
+      "auth/resend-verification": "1no5ti",
+      "auth/reset-password": "pgjax2",
+      "auth/signup": "ctaq6x",
+      "auth/sso/callback": "f0uozu",
+      "auth/sso/initiate/{id}": "9ens57",
+      "auth/sso/providers": "834bnw",
+      "auth/verify-email": "agmaks"
+    }
+  },
+  "api_gateway_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://api.test.acinaces.com"
+  },
+  "api_gateway_stage_invoke_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://al1ikuv9p5.execute-api.eu-central-1.amazonaws.com/test"
+  },
+  "api_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://api.test.acinaces.com"
+  },
+  "aws_region": {
+    "sensitive": false,
+    "type": "string",
+    "value": "eu-central-1"
+  },
+  "cicd_log_group_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "/aws/cicd/crypto-trading-test"
+  },
+  "cognito_app_client_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "2887as51vp03dtvgfj4ffro8ob"
+  },
+  "cognito_issuer": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_1NAiwNaBx"
+  },
+  "cognito_jwks_uri": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_1NAiwNaBx/.well-known/jwks.json"
+  },
+  "cognito_user_pool_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:cognito-idp:eu-central-1:383056423849:userpool/eu-central-1_1NAiwNaBx"
+  },
+  "cognito_user_pool_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "cognito-idp.eu-central-1.amazonaws.com/eu-central-1_1NAiwNaBx"
+  },
+  "cognito_user_pool_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "eu-central-1_1NAiwNaBx"
+  },
+  "dynamodb_endpoint_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpce-0aa32b0e3c3ee602a"
+  },
+  "dynamodb_table_arns": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "ai-providers": "string",
+        "alert-configs": "string",
+        "backfill-requests": "string",
+        "circuit-breaker-events": "string",
+        "circuit-breakers": "string",
+        "data-sources": "string",
+        "deployments": "string",
+        "drawdown-config": "string",
+        "drawdown-state": "string",
+        "exchange-health": "string",
+        "exchange-limits": "string",
+        "fund-allocations": "string",
+        "kill-switch-config": "string",
+        "kill-switch-state": "string",
+        "model-configurations": "string",
+        "model-performance": "string",
+        "news-events": "string",
+        "performance-predictions": "string",
+        "position-limits": "string",
+        "rate-limit-state": "string",
+        "risk-events": "string",
+        "risk-profiles": "string",
+        "sentiment-data": "string",
+        "strategies": "string",
+        "strategy-profile-assignments": "string",
+        "strategy-templates": "string",
+        "strategy-versions": "string",
+        "streams": "string",
+        "trade-lifecycle": "string",
+        "volatility-config": "string",
+        "volatility-state": "string"
+      }
+    ],
+    "value": {
+      "ai-providers": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-ai-providers",
+      "alert-configs": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-alert-configs",
+      "backfill-requests": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-backfill-requests",
+      "circuit-breaker-events": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-circuit-breaker-events",
+      "circuit-breakers": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-circuit-breakers",
+      "data-sources": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-data-sources",
+      "deployments": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-deployments",
+      "drawdown-config": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-drawdown-config",
+      "drawdown-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-drawdown-state",
+      "exchange-health": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-exchange-health",
+      "exchange-limits": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-exchange-limits",
+      "fund-allocations": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-fund-allocations",
+      "kill-switch-config": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-kill-switch-config",
+      "kill-switch-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-kill-switch-state",
+      "model-configurations": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-model-configurations",
+      "model-performance": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-model-performance",
+      "news-events": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-news-events",
+      "performance-predictions": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-performance-predictions",
+      "position-limits": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-position-limits",
+      "rate-limit-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-rate-limit-state",
+      "risk-events": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-risk-events",
+      "risk-profiles": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-risk-profiles",
+      "sentiment-data": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-sentiment-data",
+      "strategies": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-strategies",
+      "strategy-profile-assignments": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-strategy-profile-assignments",
+      "strategy-templates": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-strategy-templates",
+      "strategy-versions": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-strategy-versions",
+      "streams": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-streams",
+      "trade-lifecycle": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-trade-lifecycle",
+      "volatility-config": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-volatility-config",
+      "volatility-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-volatility-state"
+    }
+  },
+  "dynamodb_table_names": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "ai-providers": "string",
+        "alert-configs": "string",
+        "backfill-requests": "string",
+        "circuit-breaker-events": "string",
+        "circuit-breakers": "string",
+        "data-sources": "string",
+        "deployments": "string",
+        "drawdown-config": "string",
+        "drawdown-state": "string",
+        "exchange-health": "string",
+        "exchange-limits": "string",
+        "fund-allocations": "string",
+        "kill-switch-config": "string",
+        "kill-switch-state": "string",
+        "model-configurations": "string",
+        "model-performance": "string",
+        "news-events": "string",
+        "performance-predictions": "string",
+        "position-limits": "string",
+        "rate-limit-state": "string",
+        "risk-events": "string",
+        "risk-profiles": "string",
+        "sentiment-data": "string",
+        "strategies": "string",
+        "strategy-profile-assignments": "string",
+        "strategy-templates": "string",
+        "strategy-versions": "string",
+        "streams": "string",
+        "trade-lifecycle": "string",
+        "volatility-config": "string",
+        "volatility-state": "string"
+      }
+    ],
+    "value": {
+      "ai-providers": "crypto-trading-test-ai-providers",
+      "alert-configs": "crypto-trading-test-alert-configs",
+      "backfill-requests": "crypto-trading-test-backfill-requests",
+      "circuit-breaker-events": "crypto-trading-test-circuit-breaker-events",
+      "circuit-breakers": "crypto-trading-test-circuit-breakers",
+      "data-sources": "crypto-trading-test-data-sources",
+      "deployments": "crypto-trading-test-deployments",
+      "drawdown-config": "crypto-trading-test-drawdown-config",
+      "drawdown-state": "crypto-trading-test-drawdown-state",
+      "exchange-health": "crypto-trading-test-exchange-health",
+      "exchange-limits": "crypto-trading-test-exchange-limits",
+      "fund-allocations": "crypto-trading-test-fund-allocations",
+      "kill-switch-config": "crypto-trading-test-kill-switch-config",
+      "kill-switch-state": "crypto-trading-test-kill-switch-state",
+      "model-configurations": "crypto-trading-test-model-configurations",
+      "model-performance": "crypto-trading-test-model-performance",
+      "news-events": "crypto-trading-test-news-events",
+      "performance-predictions": "crypto-trading-test-performance-predictions",
+      "position-limits": "crypto-trading-test-position-limits",
+      "rate-limit-state": "crypto-trading-test-rate-limit-state",
+      "risk-events": "crypto-trading-test-risk-events",
+      "risk-profiles": "crypto-trading-test-risk-profiles",
+      "sentiment-data": "crypto-trading-test-sentiment-data",
+      "strategies": "crypto-trading-test-strategies",
+      "strategy-profile-assignments": "crypto-trading-test-strategy-profile-assignments",
+      "strategy-templates": "crypto-trading-test-strategy-templates",
+      "strategy-versions": "crypto-trading-test-strategy-versions",
+      "streams": "crypto-trading-test-streams",
+      "trade-lifecycle": "crypto-trading-test-trade-lifecycle",
+      "volatility-config": "crypto-trading-test-volatility-config",
+      "volatility-state": "crypto-trading-test-volatility-state"
+    }
+  },
+  "environment": {
+    "sensitive": false,
+    "type": "string",
+    "value": "test"
+  },
+  "eventbridge_event_bus_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:events:eu-central-1:383056423849:event-bus/crypto-trading-test-application-events"
+  },
+  "exchange_secret_arns": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "binance": "string",
+        "coinbase": "string",
+        "ftx": "string",
+        "kraken": "string"
+      }
+    ],
+    "value": {
+      "binance": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-exchange-binance-DZshi9",
+      "coinbase": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-exchange-coinbase-ro7bal",
+      "ftx": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-exchange-ftx-M54ZPd",
+      "kraken": "arn:aws:secretsmanager:eu-central-1:383056423849:secret:crypto-trading-test-exchange-kraken-PZpvRa"
+    }
+  },
+  "frontend_assets_bucket_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:s3:::crypto-trading-test-frontend-assets-383056423849"
+  },
+  "frontend_assets_bucket_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "crypto-trading-test-frontend-assets-383056423849"
+  },
+  "frontend_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://test.acinaces.com"
+  },
+  "github_actions_log_group_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "/aws/cicd/crypto-trading-test/github-actions"
+  },
+  "github_actions_role_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:iam::383056423849:role/crypto-trading-test-github-actions"
+  },
+  "github_oidc_provider_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:iam::383056423849:oidc-provider/token.actions.githubusercontent.com"
+  },
+  "lambda_deployment_bucket_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:s3:::crypto-trading-test-lambda-deployments-383056423849"
+  },
+  "lambda_deployment_bucket_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "crypto-trading-test-lambda-deployments-383056423849"
+  },
+  "lambda_function_arns": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "ai-traces": "string",
+        "allocations": "string",
+        "analysis": "string",
+        "audit": "string",
+        "audit-packages": "string",
+        "audit-stream": "string",
+        "backfills": "string",
+        "circuit-breakers": "string",
+        "compliance-reports": "string",
+        "data-lineage": "string",
+        "data-sources": "string",
+        "deployments": "string",
+        "drawdown": "string",
+        "ensemble": "string",
+        "exchange-config": "string",
+        "exchange-connections": "string",
+        "exchange-orders": "string",
+        "exchange-positions": "string",
+        "kill-switch": "string",
+        "model-configs": "string",
+        "news-context": "string",
+        "performance": "string",
+        "position-limits": "string",
+        "providers": "string",
+        "quality": "string",
+        "retention": "string",
+        "risk-events": "string",
+        "risk-profiles": "string",
+        "snapshots": "string",
+        "strategies": "string",
+        "streams": "string",
+        "templates": "string",
+        "trade-lifecycle": "string",
+        "versions": "string"
+      }
+    ],
+    "value": {
+      "ai-traces": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-ai-traces",
+      "allocations": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-allocations",
+      "analysis": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-analysis",
+      "audit": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-audit",
+      "audit-packages": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-audit-packages",
+      "audit-stream": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-audit-stream",
+      "backfills": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-backfills",
+      "circuit-breakers": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-circuit-breakers",
+      "compliance-reports": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-compliance-reports",
+      "data-lineage": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-data-lineage",
+      "data-sources": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-data-sources",
+      "deployments": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-deployments",
+      "drawdown": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-drawdown",
+      "ensemble": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-ensemble",
+      "exchange-config": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-exchange-config",
+      "exchange-connections": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-exchange-connections",
+      "exchange-orders": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-exchange-orders",
+      "exchange-positions": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-exchange-positions",
+      "kill-switch": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-kill-switch",
+      "model-configs": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-model-configs",
+      "news-context": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-news-context",
+      "performance": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-performance",
+      "position-limits": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-position-limits",
+      "providers": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-providers",
+      "quality": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-quality",
+      "retention": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-retention",
+      "risk-events": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-risk-events",
+      "risk-profiles": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-risk-profiles",
+      "snapshots": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-snapshots",
+      "strategies": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-strategies",
+      "streams": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-streams",
+      "templates": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-templates",
+      "trade-lifecycle": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-trade-lifecycle",
+      "versions": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-versions"
+    }
+  },
+  "lambda_function_names": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "ai-traces": "string",
+        "allocations": "string",
+        "analysis": "string",
+        "audit": "string",
+        "audit-packages": "string",
+        "audit-stream": "string",
+        "backfills": "string",
+        "circuit-breakers": "string",
+        "compliance-reports": "string",
+        "data-lineage": "string",
+        "data-sources": "string",
+        "deployments": "string",
+        "drawdown": "string",
+        "ensemble": "string",
+        "exchange-config": "string",
+        "exchange-connections": "string",
+        "exchange-orders": "string",
+        "exchange-positions": "string",
+        "kill-switch": "string",
+        "model-configs": "string",
+        "news-context": "string",
+        "performance": "string",
+        "position-limits": "string",
+        "providers": "string",
+        "quality": "string",
+        "retention": "string",
+        "risk-events": "string",
+        "risk-profiles": "string",
+        "snapshots": "string",
+        "strategies": "string",
+        "streams": "string",
+        "templates": "string",
+        "trade-lifecycle": "string",
+        "versions": "string"
+      }
+    ],
+    "value": {
+      "ai-traces": "crypto-trading-test-ai-traces",
+      "allocations": "crypto-trading-test-allocations",
+      "analysis": "crypto-trading-test-analysis",
+      "audit": "crypto-trading-test-audit",
+      "audit-packages": "crypto-trading-test-audit-packages",
+      "audit-stream": "crypto-trading-test-audit-stream",
+      "backfills": "crypto-trading-test-backfills",
+      "circuit-breakers": "crypto-trading-test-circuit-breakers",
+      "compliance-reports": "crypto-trading-test-compliance-reports",
+      "data-lineage": "crypto-trading-test-data-lineage",
+      "data-sources": "crypto-trading-test-data-sources",
+      "deployments": "crypto-trading-test-deployments",
+      "drawdown": "crypto-trading-test-drawdown",
+      "ensemble": "crypto-trading-test-ensemble",
+      "exchange-config": "crypto-trading-test-exchange-config",
+      "exchange-connections": "crypto-trading-test-exchange-connections",
+      "exchange-orders": "crypto-trading-test-exchange-orders",
+      "exchange-positions": "crypto-trading-test-exchange-positions",
+      "kill-switch": "crypto-trading-test-kill-switch",
+      "model-configs": "crypto-trading-test-model-configs",
+      "news-context": "crypto-trading-test-news-context",
+      "performance": "crypto-trading-test-performance",
+      "position-limits": "crypto-trading-test-position-limits",
+      "providers": "crypto-trading-test-providers",
+      "quality": "crypto-trading-test-quality",
+      "retention": "crypto-trading-test-retention",
+      "risk-events": "crypto-trading-test-risk-events",
+      "risk-profiles": "crypto-trading-test-risk-profiles",
+      "snapshots": "crypto-trading-test-snapshots",
+      "strategies": "crypto-trading-test-strategies",
+      "streams": "crypto-trading-test-streams",
+      "templates": "crypto-trading-test-templates",
+      "trade-lifecycle": "crypto-trading-test-trade-lifecycle",
+      "versions": "crypto-trading-test-versions"
+    }
+  },
+  "lambda_security_group_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "sg-04ec50f2ed6f11949"
+  },
+  "logs_endpoint_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpce-0973ea1b6f6945adc"
+  },
+  "nat_gateway_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string"
+      ]
+    ],
+    "value": [
+      "nat-0a38a485b1aa4726e"
+    ]
+  },
+  "private_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-0888aadd305c44e47",
+      "subnet-07504a721be2d4b15"
+    ]
+  },
+  "public_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-088d039d7be2edf16",
+      "subnet-08cd145719139e31d"
+    ]
+  },
+  "redis_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "master.crypto-trading-test-redis.sjd3ih.euc1.cache.amazonaws.com"
+  },
+  "redis_port": {
+    "sensitive": false,
+    "type": "number",
+    "value": 6379
+  },
+  "redis_security_group_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "sg-05a02854e3aef5c07"
+  },
+  "route53_api_record_fqdn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "api.test.acinaces.com"
+  },
+  "route53_hosted_zone_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "Z09084291UKTZ5CLO6758"
+  },
+  "route53_name_servers": {
+    "sensitive": false,
+    "type": [
+      "list",
+      "string"
+    ],
+    "value": [
+      "ns-1451.awsdns-53.org",
+      "ns-1748.awsdns-26.co.uk",
+      "ns-761.awsdns-31.net",
+      "ns-91.awsdns-11.com"
+    ]
+  },
+  "s3_endpoint_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpce-05c78b21f4a2dc0ab"
+  },
+  "secretsmanager_endpoint_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpce-00be4c8a520321a43"
+  },
+  "step_functions_state_machine_arns": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "audit-package": "string",
+        "data-backfill": "string",
+        "trade-lifecycle": "string"
+      }
+    ],
+    "value": {
+      "audit-package": "arn:aws:states:eu-central-1:383056423849:stateMachine:crypto-trading-test-audit-package",
+      "data-backfill": "arn:aws:states:eu-central-1:383056423849:stateMachine:crypto-trading-test-data-backfill",
+      "trade-lifecycle": "arn:aws:states:eu-central-1:383056423849:stateMachine:crypto-trading-test-trade-lifecycle"
+    }
+  },
+  "timestream_database_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": ""
+  },
+  "timestream_database_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": ""
+  },
+  "vpc_cidr_block": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.0.0/16"
+  },
+  "vpc_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpc-02c73b1c1ccdce892"
+  },
+  "_metadata": {
+    "environment": "test",
+    "generated_at": "2026-01-06T12:00:06Z",
+    "generator": "deploy-infrastructure.sh"
+  }
+}

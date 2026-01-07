@@ -160,16 +160,19 @@ data "aws_iam_policy_document" "github_actions_frontend" {
     ]
   }
 
-  # CloudFront invalidation permissions
-  statement {
-    sid    = "CloudFrontInvalidation"
-    effect = "Allow"
-    actions = [
-      "cloudfront:CreateInvalidation",
-      "cloudfront:GetInvalidation",
-      "cloudfront:ListInvalidations"
-    ]
-    resources = var.cloudfront_distribution_arn != null ? [var.cloudfront_distribution_arn] : []
+  # CloudFront invalidation permissions (only when distribution ARN is provided)
+  dynamic "statement" {
+    for_each = var.cloudfront_distribution_arn != null ? [1] : []
+    content {
+      sid    = "CloudFrontInvalidation"
+      effect = "Allow"
+      actions = [
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations"
+      ]
+      resources = [var.cloudfront_distribution_arn]
+    }
   }
 }
 

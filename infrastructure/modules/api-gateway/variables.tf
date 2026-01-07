@@ -143,10 +143,41 @@ variable "waf_web_acl_arn" {
 }
 
 #------------------------------------------------------------------------------
+# API Gateway Account Settings
+#------------------------------------------------------------------------------
+variable "create_cloudwatch_role" {
+  type        = bool
+  description = "Whether to create the API Gateway CloudWatch IAM role (set to false if it already exists in the account)"
+  default     = true
+}
+
+variable "existing_cloudwatch_role_arn" {
+  type        = string
+  description = "ARN of existing API Gateway CloudWatch role (required if create_cloudwatch_role is false)"
+  default     = ""
+}
+
+#------------------------------------------------------------------------------
 # Tags
 #------------------------------------------------------------------------------
 variable "tags" {
   type        = map(string)
   description = "Additional tags for resources"
   default     = {}
+}
+
+#------------------------------------------------------------------------------
+# Auth Lambda Configuration
+# Requirements: 3.1-3.12 - Auth endpoints proxied through API Gateway
+#------------------------------------------------------------------------------
+variable "auth_lambda_invoke_arn" {
+  type        = string
+  description = "Invoke ARN of the auth Lambda function"
+  default     = ""
+}
+
+variable "auth_lambda_function_name" {
+  type        = string
+  description = "Name of the auth Lambda function"
+  default     = ""
 }
