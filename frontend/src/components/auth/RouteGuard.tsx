@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -71,6 +71,7 @@ export function RouteGuard({
   const pathname = usePathname();
   const { status, session } = useAuth();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
     // Requirements: 10.1 - Check authentication status
@@ -82,15 +83,21 @@ export function RouteGuard({
 
       // Requirements: 10.2 - Redirect to login if unauthenticated
       if (status === 'unauthenticated' || status === 'session_expired') {
-        // Requirements: 10.3 - Preserve intended destination URL
-        const redirectUrl = encodeURIComponent(pathname);
-        router.push(`${loginPath}?${redirectParam}=${redirectUrl}`);
+        if (!hasRedirected.current) {
+          hasRedirected.current = true;
+          // Requirements: 10.3 - Preserve intended destination URL
+          const redirectUrl = encodeURIComponent(pathname);
+          router.replace(`${loginPath}?${redirectParam}=${redirectUrl}`);
+        }
         return;
       }
 
       // MFA required - redirect to MFA challenge
       if (status === 'mfa_required') {
-        router.push(`${loginPath}?mfa=required`);
+        if (!hasRedirected.current) {
+          hasRedirected.current = true;
+          router.replace(`${loginPath}?mfa=required`);
+        }
         return;
       }
 
@@ -101,7 +108,7 @@ export function RouteGuard({
     };
 
     checkAuth();
-  }, [status, session, pathname, router, loginPath, redirectParam]);
+  }, [status, session, pathname, loginPath, redirectParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Requirements: 10.6 - Show loading while checking
   if (status === 'idle' || status === 'loading') {

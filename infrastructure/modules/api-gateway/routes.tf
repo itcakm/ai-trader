@@ -43,9 +43,10 @@ resource "aws_api_gateway_resource" "level2_id" {
 #------------------------------------------------------------------------------
 # Lambda Permissions for API Gateway
 # Requirements: 7.2 - Create Lambda proxy integrations
+# Note: Excludes 'auth' function which has its own permission in auth-routes.tf
 #------------------------------------------------------------------------------
 resource "aws_lambda_permission" "api_gateway" {
-  for_each = var.lambda_function_names
+  for_each = { for k, v in var.lambda_function_names : k => v if k != "auth" }
 
   statement_id  = "AllowAPIGatewayInvoke-${each.key}"
   action        = "lambda:InvokeFunction"

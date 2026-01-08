@@ -196,14 +196,34 @@ export function mergePermissions(roles: Role[], userOverrides?: Permission[]): P
 
 /**
  * Convert API login response to AuthSession
+ * Handles both nested tokens format ({ tokens: {...}, user: {...} })
+ * and flat format ({ accessToken, refreshToken, idToken, expiresIn, user: {...} })
  */
 function createSessionFromLoginResponse(response: LoginResponse): AuthSession {
-  if (!response.tokens || !response.user) {
+  // Handle flat response format (tokens at root level)
+  const flatResponse = response as unknown as {
+    accessToken?: string;
+    refreshToken?: string;
+    idToken?: string;
+    expiresIn?: number;
+    user?: { id: string; email: string; name: string; tenantId: string; roles: string[] };
+  };
+  
+  const tokens = response.tokens || (flatResponse.accessToken ? {
+    accessToken: flatResponse.accessToken,
+    refreshToken: flatResponse.refreshToken || '',
+    idToken: flatResponse.idToken || '',
+    expiresIn: flatResponse.expiresIn || 3600,
+  } : null);
+  
+  const user = response.user || flatResponse.user;
+
+  if (!tokens || !user) {
     throw new Error('Invalid login response: missing tokens or user');
   }
 
-  // Create default roles from user.roles array
-  const roles: Role[] = response.user.roles.map((roleName, index) => ({
+  // Create default roles from user.roles array (handle empty array)
+  const roles: Role[] = (user.roles || []).map((roleName, index) => ({
     id: `role-${index}`,
     name: roleName,
     description: `${roleName} role`,
@@ -212,15 +232,15 @@ function createSessionFromLoginResponse(response: LoginResponse): AuthSession {
   }));
 
   return {
-    userId: response.user.id,
-    email: response.user.email,
-    name: response.user.name,
-    organizationId: response.user.tenantId,
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    organizationId: user.tenantId,
     roles,
     permissions: mergePermissions(roles),
-    accessToken: response.tokens.accessToken,
-    refreshToken: response.tokens.refreshToken,
-    expiresAt: new Date(Date.now() + response.tokens.expiresIn * 1000),
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
     mfaVerified: true,
   };
 }
@@ -478,12 +498,19 @@ export function AuthProvider({ children, onSessionExpiring }: AuthProviderProps)
               session: result.session!,
             },
           });
-        } else if (result.tokens && result.user) {
-          // Successful login
-          const session = createSessionFromLoginResponse(result);
-          saveSession(session);
-          dispatch({ type: 'SET_AUTHENTICATED', payload: session });
-          setupRefreshTimer(session);
+        } else {
+          // Check for tokens in both nested and flat format
+          const flatResult = result as unknown as { accessToken?: string; user?: { id: string } };
+          const hasTokens = result.tokens || flatResult.accessToken;
+          const hasUser = result.user || flatResult.user;
+          
+          if (hasTokens && hasUser) {
+            // Successful login
+            const session = createSessionFromLoginResponse(result);
+            saveSession(session);
+            dispatch({ type: 'SET_AUTHENTICATED', payload: session });
+            setupRefreshTimer(session);
+          }
         }
       } catch (error) {
         const message = error instanceof AuthError 
@@ -528,7 +555,12 @@ export function AuthProvider({ children, onSessionExpiring }: AuthProviderProps)
         // Replace cognitoVerifyMFA with authAPI.verifyMFAChallenge
         const result = await authAPI.verifyMFAChallenge(state.mfaChallenge.session, code);
         
-        if (result.tokens && result.user) {
+        // Check for tokens in both nested and flat format
+        const flatResult = result as unknown as { accessToken?: string; user?: { id: string } };
+        const hasTokens = result.tokens || flatResult.accessToken;
+        const hasUser = result.user || flatResult.user;
+        
+        if (hasTokens && hasUser) {
           const session = createSessionFromLoginResponse(result);
           session.mfaVerified = true;
           saveSession(session);

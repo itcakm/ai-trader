@@ -130,7 +130,7 @@ resource "aws_api_gateway_method" "auth_post" {
 }
 
 resource "aws_api_gateway_integration" "auth_post" {
-  for_each = var.auth_lambda_invoke_arn != "" ? local.auth_post_endpoints : {}
+  for_each = var.enable_auth_routes ? local.auth_post_endpoints : {}
 
   rest_api_id             = aws_api_gateway_rest_api.main.id
   resource_id             = each.value
@@ -156,7 +156,7 @@ resource "aws_api_gateway_method" "auth_mfa_post" {
 }
 
 resource "aws_api_gateway_integration" "auth_mfa_post" {
-  for_each = var.auth_lambda_invoke_arn != "" ? local.auth_mfa_post_endpoints : {}
+  for_each = var.enable_auth_routes ? local.auth_mfa_post_endpoints : {}
 
   rest_api_id             = aws_api_gateway_rest_api.main.id
   resource_id             = each.value
@@ -180,7 +180,7 @@ resource "aws_api_gateway_method" "auth_me_get" {
 }
 
 resource "aws_api_gateway_integration" "auth_me_get" {
-  count = var.auth_lambda_invoke_arn != "" ? 1 : 0
+  count = var.enable_auth_routes ? 1 : 0
 
   rest_api_id             = aws_api_gateway_rest_api.main.id
   resource_id             = aws_api_gateway_resource.auth_level2["me"].id
@@ -206,7 +206,7 @@ resource "aws_api_gateway_method" "auth_sso_providers_get" {
 }
 
 resource "aws_api_gateway_integration" "auth_sso_providers_get" {
-  count = var.auth_lambda_invoke_arn != "" ? 1 : 0
+  count = var.enable_auth_routes ? 1 : 0
 
   rest_api_id             = aws_api_gateway_rest_api.main.id
   resource_id             = aws_api_gateway_resource.auth_sso_providers.id
@@ -231,7 +231,7 @@ resource "aws_api_gateway_method" "auth_sso_initiate_get" {
 }
 
 resource "aws_api_gateway_integration" "auth_sso_initiate_get" {
-  count = var.auth_lambda_invoke_arn != "" ? 1 : 0
+  count = var.enable_auth_routes ? 1 : 0
 
   rest_api_id             = aws_api_gateway_rest_api.main.id
   resource_id             = aws_api_gateway_resource.auth_sso_initiate_id.id
@@ -252,7 +252,7 @@ resource "aws_api_gateway_method" "auth_sso_callback_post" {
 }
 
 resource "aws_api_gateway_integration" "auth_sso_callback_post" {
-  count = var.auth_lambda_invoke_arn != "" ? 1 : 0
+  count = var.enable_auth_routes ? 1 : 0
 
   rest_api_id             = aws_api_gateway_rest_api.main.id
   resource_id             = aws_api_gateway_resource.auth_sso_callback.id
@@ -463,7 +463,7 @@ resource "aws_api_gateway_integration_response" "auth_sso_options" {
 # Lambda Permission for Auth Handler
 #------------------------------------------------------------------------------
 resource "aws_lambda_permission" "auth_api_gateway" {
-  count = var.auth_lambda_function_name != "" ? 1 : 0
+  count = var.enable_auth_routes ? 1 : 0
 
   statement_id  = "AllowAPIGatewayInvoke-auth"
   action        = "lambda:InvokeFunction"

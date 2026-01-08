@@ -126,3 +126,31 @@ variable "excluded_functions" {
   description = "List of function names to exclude from deployment (e.g., functions without packages yet)"
   default     = []
 }
+
+#------------------------------------------------------------------------------
+# Cognito Configuration
+# Required for auth Lambda functions
+#------------------------------------------------------------------------------
+variable "cognito_user_pool_id" {
+  type        = string
+  description = "Cognito User Pool ID"
+  default     = ""
+}
+
+variable "cognito_client_id" {
+  type        = string
+  description = "Cognito App Client ID"
+  default     = ""
+}
+
+variable "cognito_issuer" {
+  type        = string
+  description = "Cognito token issuer URL"
+  default     = ""
+}
+
+variable "cognito_jwks_uri" {
+  type        = string
+  description = "Cognito JWKS URI for token validation"
+  default     = ""
+}

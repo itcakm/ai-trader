@@ -192,3 +192,22 @@ output "auth_trigger_function_arns" {
     post_authentication = contains(keys(aws_lambda_function.functions), "auth-post-authentication") ? aws_lambda_function.functions["auth-post-authentication"].arn : null
   }
 }
+
+#------------------------------------------------------------------------------
+# Auth Handler Function Outputs (API Gateway auth endpoints)
+# Requirements: 3.1-3.12
+#------------------------------------------------------------------------------
+output "auth_function_arn" {
+  description = "ARN of the auth Lambda function"
+  value       = contains(keys(aws_lambda_function.functions), "auth") ? aws_lambda_function.functions["auth"].arn : null
+}
+
+output "auth_function_invoke_arn" {
+  description = "Invoke ARN of the auth Lambda function"
+  value       = contains(keys(aws_lambda_function.functions), "auth") ? aws_lambda_function.functions["auth"].invoke_arn : null
+}
+
+output "auth_function_name" {
+  description = "Name of the auth Lambda function"
+  value       = contains(keys(aws_lambda_function.functions), "auth") ? aws_lambda_function.functions["auth"].function_name : null
+}

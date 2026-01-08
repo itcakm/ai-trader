@@ -30,6 +30,19 @@ output "frontend_validated_certificate_arn" {
 }
 
 #------------------------------------------------------------------------------
+# CloudFront Certificate Outputs (us-east-1)
+#------------------------------------------------------------------------------
+output "cloudfront_certificate_arn" {
+  description = "ARN of the CloudFront ACM certificate in us-east-1"
+  value       = aws_acm_certificate.cloudfront.arn
+}
+
+output "cloudfront_validated_certificate_arn" {
+  description = "ARN of the validated CloudFront certificate in us-east-1 (use this for CloudFront distribution)"
+  value       = var.wait_for_validation && var.create_route53_records && var.route53_zone_id != "" ? aws_acm_certificate_validation.cloudfront[0].certificate_arn : aws_acm_certificate.cloudfront.arn
+}
+
+#------------------------------------------------------------------------------
 # API Certificate Outputs
 #------------------------------------------------------------------------------
 output "api_certificate_arn" {

@@ -135,6 +135,16 @@ output "api_gateway_stage_invoke_url" {
   value       = module.api_gateway.stage_invoke_url
 }
 
+output "api_gateway_rest_api_id" {
+  description = "API Gateway REST API ID"
+  value       = module.api_gateway.rest_api_id
+}
+
+output "api_gateway_stage_name" {
+  description = "API Gateway stage name"
+  value       = module.api_gateway.stage_name
+}
+
 output "lambda_function_names" {
   description = "Map of Lambda function names"
   value       = module.lambda.function_names

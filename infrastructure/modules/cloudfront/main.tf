@@ -14,6 +14,10 @@ locals {
 
   # Combine primary domain with aliases
   all_aliases = concat([var.domain_name], var.domain_aliases)
+
+  # AWS Managed Cache Policy IDs
+  # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
+  caching_disabled_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
 }
 
 #------------------------------------------------------------------------------
@@ -74,16 +78,6 @@ resource "aws_cloudfront_cache_policy" "static_assets" {
     enable_accept_encoding_brotli = true
     enable_accept_encoding_gzip   = true
   }
-}
-
-#------------------------------------------------------------------------------
-# Cache Policy for Dynamic Content
-# Requirements: 10.5 - Configure cache behaviors for dynamic content (no cache)
-# Note: Use AWS managed CachingDisabled policy (ID: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad)
-# Custom policies with TTL=0 cannot have compression or query string forwarding
-#------------------------------------------------------------------------------
-data "aws_cloudfront_cache_policy" "caching_disabled" {
-  name = "Managed-CachingDisabled"
 }
 
 #------------------------------------------------------------------------------
@@ -185,7 +179,7 @@ resource "aws_cloudfront_distribution" "main" {
     target_origin_id = "S3-${var.s3_bucket_id}"
 
     # Use AWS managed CachingDisabled policy for dynamic content
-    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    cache_policy_id            = local.caching_disabled_policy_id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.s3_origin.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
 

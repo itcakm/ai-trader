@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useCallback } from 'react';
-import { useAuth } from '@/providers/AuthProvider';
 import { DashboardProvider, useDashboard } from '@/providers/DashboardProvider';
 import { DashboardGrid } from '@/components/dashboard/DashboardGrid';
 import { MetricCard, LineChart, AlertList, ActivityFeed } from '@/components/dashboard';
-import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import type { Dashboard, DashboardWidget, MetricData, DataPoint, AlertData, ActivityData } from '@/types/dashboard';
 
@@ -88,7 +86,6 @@ const defaultDashboard: Dashboard = {
 
 function TradingDashboard() {
   const { dashboard } = useDashboard();
-  const { session, logout } = useAuth();
   const currentDashboard = dashboard || defaultDashboard;
 
   const renderWidget = useCallback((widget: DashboardWidget) => {
@@ -141,39 +138,13 @@ function TradingDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-foreground">AI Crypto Trading</h1>
-            <span className="text-sm text-muted-foreground">|</span>
-            <span className="text-sm text-muted-foreground">{currentDashboard.name}</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {session && (
-              <span className="text-sm text-muted-foreground">
-                {session.name || session.email}
-              </span>
-            )}
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">Settings</Button>
-              <Button variant="primary" size="sm">New Strategy</Button>
-              <Button variant="ghost" size="sm" onClick={() => logout()}>
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main id="main-content" className="container mx-auto px-4 py-6" tabIndex={-1} aria-label="Main content">
-        <DashboardGrid
-          widgets={currentDashboard.widgets}
-          layout={currentDashboard.layout}
-          renderWidget={renderWidget}
-          className="min-h-[600px]"
-        />
-      </main>
+    <div id="main-content" tabIndex={-1} aria-label="Main content">
+      <DashboardGrid
+        widgets={currentDashboard.widgets}
+        layout={currentDashboard.layout}
+        renderWidget={renderWidget}
+        className="min-h-[600px]"
+      />
     </div>
   );
 }

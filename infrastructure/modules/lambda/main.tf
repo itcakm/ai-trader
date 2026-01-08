@@ -92,6 +92,13 @@ resource "aws_lambda_function" "functions" {
       },
       # Secrets ARNs
       { for k, v in var.secrets_arns : "SECRET_ARN_${upper(replace(k, "-", "_"))}" => v },
+      # Cognito configuration (for auth functions)
+      {
+        COGNITO_USER_POOL_ID = var.cognito_user_pool_id
+        COGNITO_CLIENT_ID    = var.cognito_client_id
+        COGNITO_ISSUER       = var.cognito_issuer
+        COGNITO_JWKS_URI     = var.cognito_jwks_uri
+      },
       # Common configuration
       # Note: AWS_REGION is automatically provided by Lambda runtime
       {

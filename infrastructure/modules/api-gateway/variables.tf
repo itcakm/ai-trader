@@ -170,6 +170,12 @@ variable "tags" {
 # Auth Lambda Configuration
 # Requirements: 3.1-3.12 - Auth endpoints proxied through API Gateway
 #------------------------------------------------------------------------------
+variable "enable_auth_routes" {
+  type        = bool
+  description = "Whether to create auth route integrations (set to true when auth Lambda is deployed)"
+  default     = true
+}
+
 variable "auth_lambda_invoke_arn" {
   type        = string
   description = "Invoke ARN of the auth Lambda function"

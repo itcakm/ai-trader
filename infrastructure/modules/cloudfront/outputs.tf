@@ -64,7 +64,7 @@ output "static_assets_cache_policy_id" {
 
 output "dynamic_content_cache_policy_id" {
   description = "ID of the AWS managed CachingDisabled policy for dynamic content"
-  value       = data.aws_cloudfront_cache_policy.caching_disabled.id
+  value       = local.caching_disabled_policy_id
 }
 
 #------------------------------------------------------------------------------

@@ -55,6 +55,9 @@ locals {
     auth-pre-signup          = "auth"
     auth-post-confirmation   = "auth"
     auth-post-authentication = "auth"
+
+    # Auth Handler (API Gateway auth endpoints)
+    auth = "auth"
   }
 
   # All 34 Lambda function configurations
@@ -64,7 +67,7 @@ locals {
     #---------------------------------------------------------------------------
     strategies = {
       description          = "Strategy CRUD operations"
-      handler              = "handlers/strategies.handler"
+      handler              = "dist/handlers/strategies.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -72,7 +75,7 @@ locals {
 
     templates = {
       description          = "Strategy template management"
-      handler              = "handlers/templates.handler"
+      handler              = "dist/handlers/templates.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -80,7 +83,7 @@ locals {
 
     versions = {
       description          = "Strategy version management"
-      handler              = "handlers/versions.handler"
+      handler              = "dist/handlers/versions.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -88,7 +91,7 @@ locals {
 
     deployments = {
       description          = "Strategy deployment management"
-      handler              = "handlers/deployments.handler"
+      handler              = "dist/handlers/deployments.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -99,7 +102,7 @@ locals {
     #---------------------------------------------------------------------------
     streams = {
       description          = "Market data stream management"
-      handler              = "handlers/streams.handler"
+      handler              = "dist/handlers/streams.handler"
       memory_size          = 512
       timeout              = 60
       reserved_concurrency = null
@@ -107,7 +110,7 @@ locals {
 
     data-sources = {
       description          = "Data source configuration"
-      handler              = "handlers/data-sources.handler"
+      handler              = "dist/handlers/data-sources.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -115,7 +118,7 @@ locals {
 
     backfills = {
       description          = "Historical data backfill processing"
-      handler              = "handlers/backfills.handler"
+      handler              = "dist/handlers/backfills.handler"
       memory_size          = 1024
       timeout              = 300
       reserved_concurrency = null
@@ -123,7 +126,7 @@ locals {
 
     quality = {
       description          = "Data quality monitoring"
-      handler              = "handlers/quality.handler"
+      handler              = "dist/handlers/quality.handler"
       memory_size          = 512
       timeout              = 60
       reserved_concurrency = null
@@ -131,7 +134,7 @@ locals {
 
     news-context = {
       description          = "News context processing"
-      handler              = "handlers/news-context.handler"
+      handler              = "dist/handlers/news-context.handler"
       memory_size          = 512
       timeout              = 60
       reserved_concurrency = null
@@ -142,7 +145,7 @@ locals {
     #---------------------------------------------------------------------------
     analysis = {
       description          = "AI analysis processing"
-      handler              = "handlers/analysis.handler"
+      handler              = "dist/handlers/analysis.handler"
       memory_size          = 1024
       timeout              = 60
       reserved_concurrency = null
@@ -150,7 +153,7 @@ locals {
 
     model-configs = {
       description          = "AI model configuration management"
-      handler              = "handlers/model-configs.handler"
+      handler              = "dist/handlers/model-configs.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -158,7 +161,7 @@ locals {
 
     providers = {
       description          = "AI provider management"
-      handler              = "handlers/providers.handler"
+      handler              = "dist/handlers/providers.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -166,7 +169,7 @@ locals {
 
     allocations = {
       description          = "AI allocation management"
-      handler              = "handlers/allocations.handler"
+      handler              = "dist/handlers/allocations.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -174,7 +177,7 @@ locals {
 
     ensemble = {
       description          = "AI ensemble processing"
-      handler              = "handlers/ensemble.handler"
+      handler              = "dist/handlers/ensemble.handler"
       memory_size          = 1024
       timeout              = 60
       reserved_concurrency = null
@@ -182,7 +185,7 @@ locals {
 
     performance = {
       description          = "Performance metrics processing"
-      handler              = "handlers/performance.handler"
+      handler              = "dist/handlers/performance.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -193,7 +196,7 @@ locals {
     #---------------------------------------------------------------------------
     position-limits = {
       description          = "Position limit enforcement"
-      handler              = "handlers/position-limits.handler"
+      handler              = "dist/handlers/position-limits.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = 10
@@ -201,7 +204,7 @@ locals {
 
     drawdown = {
       description          = "Drawdown monitoring and control"
-      handler              = "handlers/drawdown.handler"
+      handler              = "dist/handlers/drawdown.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = 10
@@ -209,7 +212,7 @@ locals {
 
     circuit-breakers = {
       description          = "Circuit breaker management"
-      handler              = "handlers/circuit-breakers.handler"
+      handler              = "dist/handlers/circuit-breakers.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = 20
@@ -217,7 +220,7 @@ locals {
 
     kill-switch = {
       description          = "Emergency kill switch"
-      handler              = "handlers/kill-switch.handler"
+      handler              = "dist/handlers/kill-switch.handler"
       memory_size          = 256
       timeout              = 10
       reserved_concurrency = 50
@@ -225,7 +228,7 @@ locals {
 
     risk-profiles = {
       description          = "Risk profile management"
-      handler              = "handlers/risk-profiles.handler"
+      handler              = "dist/handlers/risk-profiles.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -233,7 +236,7 @@ locals {
 
     risk-events = {
       description          = "Risk event processing"
-      handler              = "handlers/risk-events.handler"
+      handler              = "dist/handlers/risk-events.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -244,7 +247,7 @@ locals {
     #---------------------------------------------------------------------------
     exchange-config = {
       description          = "Exchange configuration management"
-      handler              = "handlers/exchange-config.handler"
+      handler              = "dist/handlers/exchange-config.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -252,7 +255,7 @@ locals {
 
     exchange-connections = {
       description          = "Exchange connection management"
-      handler              = "handlers/exchange-connections.handler"
+      handler              = "dist/handlers/exchange-connections.handler"
       memory_size          = 512
       timeout              = 60
       reserved_concurrency = null
@@ -260,7 +263,7 @@ locals {
 
     exchange-orders = {
       description          = "Exchange order execution"
-      handler              = "handlers/exchange-orders.handler"
+      handler              = "dist/handlers/exchange-orders.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = 100
@@ -268,7 +271,7 @@ locals {
 
     exchange-positions = {
       description          = "Exchange position management"
-      handler              = "handlers/exchange-positions.handler"
+      handler              = "dist/handlers/exchange-positions.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -279,7 +282,7 @@ locals {
     #---------------------------------------------------------------------------
     audit = {
       description          = "Audit log management"
-      handler              = "handlers/audit.handler"
+      handler              = "dist/handlers/audit.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -287,7 +290,7 @@ locals {
 
     audit-packages = {
       description          = "Audit package generation"
-      handler              = "handlers/audit-packages.handler"
+      handler              = "dist/handlers/audit-packages.handler"
       memory_size          = 1024
       timeout              = 300
       reserved_concurrency = null
@@ -295,7 +298,7 @@ locals {
 
     audit-stream = {
       description          = "Audit stream processing"
-      handler              = "handlers/audit-stream.handler"
+      handler              = "dist/handlers/audit-stream.handler"
       memory_size          = 512
       timeout              = 60
       reserved_concurrency = null
@@ -303,7 +306,7 @@ locals {
 
     ai-traces = {
       description          = "AI decision trace management"
-      handler              = "handlers/ai-traces.handler"
+      handler              = "dist/handlers/ai-traces.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -311,7 +314,7 @@ locals {
 
     data-lineage = {
       description          = "Data lineage tracking"
-      handler              = "handlers/data-lineage.handler"
+      handler              = "dist/handlers/data-lineage.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -319,7 +322,7 @@ locals {
 
     compliance-reports = {
       description          = "Compliance report generation"
-      handler              = "handlers/compliance-reports.handler"
+      handler              = "dist/handlers/compliance-reports.handler"
       memory_size          = 1024
       timeout              = 300
       reserved_concurrency = null
@@ -327,7 +330,7 @@ locals {
 
     trade-lifecycle = {
       description          = "Trade lifecycle tracking"
-      handler              = "handlers/trade-lifecycle.handler"
+      handler              = "dist/handlers/trade-lifecycle.handler"
       memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
@@ -335,7 +338,7 @@ locals {
 
     retention = {
       description          = "Data retention policy enforcement"
-      handler              = "handlers/retention.handler"
+      handler              = "dist/handlers/retention.handler"
       memory_size          = 512
       timeout              = 300
       reserved_concurrency = null
@@ -343,7 +346,7 @@ locals {
 
     snapshots = {
       description          = "System state snapshot management"
-      handler              = "handlers/snapshots.handler"
+      handler              = "dist/handlers/snapshots.handler"
       memory_size          = 1024
       timeout              = 300
       reserved_concurrency = null
@@ -355,7 +358,7 @@ locals {
     #---------------------------------------------------------------------------
     auth-pre-signup = {
       description          = "Cognito pre-signup validation trigger"
-      handler              = "handlers/auth/triggers/pre-signup.handler"
+      handler              = "dist/handlers/auth/triggers/pre-signup.handler"
       memory_size          = 256
       timeout              = 10
       reserved_concurrency = null
@@ -363,7 +366,7 @@ locals {
 
     auth-post-confirmation = {
       description          = "Cognito post-confirmation user setup trigger"
-      handler              = "handlers/auth/triggers/post-confirmation.handler"
+      handler              = "dist/handlers/auth/triggers/post-confirmation.handler"
       memory_size          = 256
       timeout              = 30
       reserved_concurrency = null
@@ -371,8 +374,20 @@ locals {
 
     auth-post-authentication = {
       description          = "Cognito post-authentication login notification trigger"
-      handler              = "handlers/auth/triggers/post-authentication.handler"
+      handler              = "dist/handlers/auth/triggers/post-authentication.handler"
       memory_size          = 256
+      timeout              = 30
+      reserved_concurrency = null
+    }
+
+    #---------------------------------------------------------------------------
+    # Auth Handler (API Gateway auth endpoints)
+    # Requirements: 3.1-3.12 - Authentication endpoints
+    #---------------------------------------------------------------------------
+    auth = {
+      description          = "Authentication API handler (signup, login, logout, etc.)"
+      handler              = "dist/handlers/auth.handler"
+      memory_size          = 512
       timeout              = 30
       reserved_concurrency = null
     }

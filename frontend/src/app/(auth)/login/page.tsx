@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/providers/AuthProvider';
@@ -41,16 +41,18 @@ function LoginContent() {
   const [loadingSSOProviders, setLoadingSSOProviders] = useState(true);
   const [ssoError, setSsoError] = useState<string | null>(null);
   const [initiatingSSO, setInitiatingSSO] = useState<string | null>(null);
+  const hasRedirected = useRef(false);
 
   // Get redirect URL from query params
   const redirectUrl = searchParams.get('redirect') || '/';
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (status === 'authenticated') {
-      router.push(redirectUrl);
+    if (status === 'authenticated' && !hasRedirected.current) {
+      hasRedirected.current = true;
+      router.replace(redirectUrl);
     }
-  }, [status, router, redirectUrl]);
+  }, [status, redirectUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load SSO providers on mount
   useEffect(() => {

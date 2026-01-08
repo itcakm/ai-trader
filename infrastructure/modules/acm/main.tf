@@ -17,7 +17,7 @@ locals {
 }
 
 #------------------------------------------------------------------------------
-# Frontend Domain Certificate
+# Frontend Domain Certificate (Regional - for non-CloudFront use)
 # Requirements: 19.1 - Create certificates for frontend domain
 #------------------------------------------------------------------------------
 resource "aws_acm_certificate" "frontend" {
@@ -34,6 +34,32 @@ resource "aws_acm_certificate" "frontend" {
     {
       Name    = "${local.name_prefix}-frontend-cert"
       Purpose = "frontend"
+    }
+  )
+}
+
+#------------------------------------------------------------------------------
+# CloudFront Certificate (us-east-1 - required for CloudFront)
+# Requirements: 19.1 - Create certificates for frontend domain
+# Note: CloudFront requires certificates in us-east-1
+#------------------------------------------------------------------------------
+resource "aws_acm_certificate" "cloudfront" {
+  provider = aws.us_east_1
+
+  domain_name               = var.domain_name
+  subject_alternative_names = concat(["www.${var.domain_name}"], var.subject_alternative_names)
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name    = "${local.name_prefix}-cloudfront-cert"
+      Purpose = "cloudfront"
+      Region  = "us-east-1"
     }
   )
 }
@@ -83,6 +109,28 @@ resource "aws_route53_record" "frontend_validation" {
 }
 
 #------------------------------------------------------------------------------
+# DNS Validation Records for CloudFront Certificate (us-east-1)
+# Requirements: 19.3 - Configure DNS validation for certificate issuance
+# Note: DNS records are region-agnostic, so we create them with the default provider
+#------------------------------------------------------------------------------
+resource "aws_route53_record" "cloudfront_validation" {
+  for_each = var.create_route53_records && var.route53_zone_id != "" ? {
+    for dvo in aws_acm_certificate.cloudfront.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = var.route53_zone_id
+}
+
+#------------------------------------------------------------------------------
 # DNS Validation Records for API Certificate
 # Requirements: 19.3 - Configure DNS validation for certificate issuance
 #------------------------------------------------------------------------------
@@ -112,6 +160,22 @@ resource "aws_acm_certificate_validation" "frontend" {
 
   certificate_arn         = aws_acm_certificate.frontend.arn
   validation_record_fqdns = [for record in aws_route53_record.frontend_validation : record.fqdn]
+
+  timeouts {
+    create = var.validation_timeout
+  }
+}
+
+#------------------------------------------------------------------------------
+# Certificate Validation - CloudFront (us-east-1)
+# Waits for DNS validation to complete
+#------------------------------------------------------------------------------
+resource "aws_acm_certificate_validation" "cloudfront" {
+  provider = aws.us_east_1
+  count    = var.wait_for_validation && var.create_route53_records && var.route53_zone_id != "" ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.cloudfront.arn
+  validation_record_fqdns = [for record in aws_route53_record.cloudfront_validation : record.fqdn]
 
   timeouts {
     create = var.validation_timeout

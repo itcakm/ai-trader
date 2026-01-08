@@ -194,6 +194,47 @@ capture_outputs() {
     fi
 }
 
+# Deploy API Gateway changes to stage
+deploy_api_gateway() {
+    local infra_dir=$1
+    local environment=$2
+    
+    log_info "Deploying API Gateway changes to stage..."
+    
+    cd "$infra_dir"
+    
+    # Get API Gateway REST API ID and stage name from Terraform outputs
+    local rest_api_id=$(terraform output -raw api_gateway_rest_api_id 2>/dev/null || echo "")
+    local stage_name=$(terraform output -raw api_gateway_stage_name 2>/dev/null || echo "$environment")
+    local aws_region=$(terraform output -raw aws_region 2>/dev/null || echo "eu-central-1")
+    
+    if [ -z "$rest_api_id" ]; then
+        log_warning "Could not get API Gateway REST API ID from Terraform outputs"
+        log_warning "Skipping API Gateway deployment"
+        return 0
+    fi
+    
+    log_info "  REST API ID: $rest_api_id"
+    log_info "  Stage: $stage_name"
+    log_info "  Region: $aws_region"
+    
+    # Create a new deployment
+    local deployment_id
+    if deployment_id=$(aws apigateway create-deployment \
+        --rest-api-id "$rest_api_id" \
+        --stage-name "$stage_name" \
+        --description "Deployment from deploy-infrastructure.sh at $(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --region "$aws_region" \
+        --query 'id' \
+        --output text 2>&1); then
+        log_success "API Gateway deployment created: $deployment_id"
+    else
+        log_warning "Failed to create API Gateway deployment: $deployment_id"
+        log_warning "You may need to manually deploy the API Gateway stage"
+        return 0
+    fi
+}
+
 # Verify critical resources were created
 verify_resources() {
     local environment=$1
@@ -330,6 +371,9 @@ main() {
     
     # Run Terraform apply
     terraform_apply "$infra_dir"
+    
+    # Deploy API Gateway changes to stage
+    deploy_api_gateway "$infra_dir" "$environment"
     
     # Capture outputs to manifest
     capture_outputs "$infra_dir" "$environment"

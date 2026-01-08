@@ -129,6 +129,26 @@
     "type": "string",
     "value": "/aws/cicd/crypto-trading-test"
   },
+  "cloudfront_distribution_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:cloudfront::383056423849:distribution/E6RWA1G7L2XCG"
+  },
+  "cloudfront_distribution_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "E6RWA1G7L2XCG"
+  },
+  "cloudfront_domain_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "d3jb6nodn2n3h.cloudfront.net"
+  },
+  "cloudfront_hosted_zone_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "Z2FDTNDATAQYW2"
+  },
   "cognito_app_client_id": {
     "sensitive": false,
     "type": "string",
@@ -171,6 +191,7 @@
       {
         "ai-providers": "string",
         "alert-configs": "string",
+        "auth-audit": "string",
         "backfill-requests": "string",
         "circuit-breaker-events": "string",
         "circuit-breakers": "string",
@@ -183,9 +204,11 @@
         "fund-allocations": "string",
         "kill-switch-config": "string",
         "kill-switch-state": "string",
+        "login-history": "string",
         "model-configurations": "string",
         "model-performance": "string",
         "news-events": "string",
+        "password-history": "string",
         "performance-predictions": "string",
         "position-limits": "string",
         "rate-limit-state": "string",
@@ -198,6 +221,7 @@
         "strategy-versions": "string",
         "streams": "string",
         "trade-lifecycle": "string",
+        "user-profiles": "string",
         "volatility-config": "string",
         "volatility-state": "string"
       }
@@ -205,6 +229,7 @@
     "value": {
       "ai-providers": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-ai-providers",
       "alert-configs": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-alert-configs",
+      "auth-audit": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-auth-audit",
       "backfill-requests": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-backfill-requests",
       "circuit-breaker-events": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-circuit-breaker-events",
       "circuit-breakers": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-circuit-breakers",
@@ -217,9 +242,11 @@
       "fund-allocations": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-fund-allocations",
       "kill-switch-config": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-kill-switch-config",
       "kill-switch-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-kill-switch-state",
+      "login-history": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-login-history",
       "model-configurations": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-model-configurations",
       "model-performance": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-model-performance",
       "news-events": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-news-events",
+      "password-history": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-password-history",
       "performance-predictions": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-performance-predictions",
       "position-limits": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-position-limits",
       "rate-limit-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-rate-limit-state",
@@ -232,6 +259,7 @@
       "strategy-versions": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-strategy-versions",
       "streams": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-streams",
       "trade-lifecycle": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-trade-lifecycle",
+      "user-profiles": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-user-profiles",
       "volatility-config": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-volatility-config",
       "volatility-state": "arn:aws:dynamodb:eu-central-1:383056423849:table/crypto-trading-test-volatility-state"
     }
@@ -243,6 +271,7 @@
       {
         "ai-providers": "string",
         "alert-configs": "string",
+        "auth-audit": "string",
         "backfill-requests": "string",
         "circuit-breaker-events": "string",
         "circuit-breakers": "string",
@@ -255,9 +284,11 @@
         "fund-allocations": "string",
         "kill-switch-config": "string",
         "kill-switch-state": "string",
+        "login-history": "string",
         "model-configurations": "string",
         "model-performance": "string",
         "news-events": "string",
+        "password-history": "string",
         "performance-predictions": "string",
         "position-limits": "string",
         "rate-limit-state": "string",
@@ -270,6 +301,7 @@
         "strategy-versions": "string",
         "streams": "string",
         "trade-lifecycle": "string",
+        "user-profiles": "string",
         "volatility-config": "string",
         "volatility-state": "string"
       }
@@ -277,6 +309,7 @@
     "value": {
       "ai-providers": "crypto-trading-test-ai-providers",
       "alert-configs": "crypto-trading-test-alert-configs",
+      "auth-audit": "crypto-trading-test-auth-audit",
       "backfill-requests": "crypto-trading-test-backfill-requests",
       "circuit-breaker-events": "crypto-trading-test-circuit-breaker-events",
       "circuit-breakers": "crypto-trading-test-circuit-breakers",
@@ -289,9 +322,11 @@
       "fund-allocations": "crypto-trading-test-fund-allocations",
       "kill-switch-config": "crypto-trading-test-kill-switch-config",
       "kill-switch-state": "crypto-trading-test-kill-switch-state",
+      "login-history": "crypto-trading-test-login-history",
       "model-configurations": "crypto-trading-test-model-configurations",
       "model-performance": "crypto-trading-test-model-performance",
       "news-events": "crypto-trading-test-news-events",
+      "password-history": "crypto-trading-test-password-history",
       "performance-predictions": "crypto-trading-test-performance-predictions",
       "position-limits": "crypto-trading-test-position-limits",
       "rate-limit-state": "crypto-trading-test-rate-limit-state",
@@ -304,6 +339,7 @@
       "strategy-versions": "crypto-trading-test-strategy-versions",
       "streams": "crypto-trading-test-streams",
       "trade-lifecycle": "crypto-trading-test-trade-lifecycle",
+      "user-profiles": "crypto-trading-test-user-profiles",
       "volatility-config": "crypto-trading-test-volatility-config",
       "volatility-state": "crypto-trading-test-volatility-state"
     }
@@ -387,6 +423,10 @@
         "audit": "string",
         "audit-packages": "string",
         "audit-stream": "string",
+        "auth": "string",
+        "auth-post-authentication": "string",
+        "auth-post-confirmation": "string",
+        "auth-pre-signup": "string",
         "backfills": "string",
         "circuit-breakers": "string",
         "compliance-reports": "string",
@@ -424,6 +464,10 @@
       "audit": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-audit",
       "audit-packages": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-audit-packages",
       "audit-stream": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-audit-stream",
+      "auth": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-auth",
+      "auth-post-authentication": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-auth-post-authentication",
+      "auth-post-confirmation": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-auth-post-confirmation",
+      "auth-pre-signup": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-auth-pre-signup",
       "backfills": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-backfills",
       "circuit-breakers": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-circuit-breakers",
       "compliance-reports": "arn:aws:lambda:eu-central-1:383056423849:function:crypto-trading-test-compliance-reports",
@@ -465,6 +509,10 @@
         "audit": "string",
         "audit-packages": "string",
         "audit-stream": "string",
+        "auth": "string",
+        "auth-post-authentication": "string",
+        "auth-post-confirmation": "string",
+        "auth-pre-signup": "string",
         "backfills": "string",
         "circuit-breakers": "string",
         "compliance-reports": "string",
@@ -502,6 +550,10 @@
       "audit": "crypto-trading-test-audit",
       "audit-packages": "crypto-trading-test-audit-packages",
       "audit-stream": "crypto-trading-test-audit-stream",
+      "auth": "crypto-trading-test-auth",
+      "auth-post-authentication": "crypto-trading-test-auth-post-authentication",
+      "auth-post-confirmation": "crypto-trading-test-auth-post-confirmation",
+      "auth-pre-signup": "crypto-trading-test-auth-pre-signup",
       "backfills": "crypto-trading-test-backfills",
       "circuit-breakers": "crypto-trading-test-circuit-breakers",
       "compliance-reports": "crypto-trading-test-compliance-reports",
@@ -668,7 +720,7 @@
   },
   "_metadata": {
     "environment": "test",
-    "generated_at": "2026-01-06T12:00:06Z",
+    "generated_at": "2026-01-08T03:06:05Z",
     "generator": "deploy-infrastructure.sh"
   }
 }

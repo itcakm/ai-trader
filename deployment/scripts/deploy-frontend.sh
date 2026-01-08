@@ -166,62 +166,46 @@ run_tests() {
 # ============================================================================
 
 export_static_files() {
-    log_info "Exporting static files..."
+    log_info "Checking static export output..."
     
     cd "$FRONTEND_DIR"
     
-    # Check if Next.js is configured for static export
-    # Next.js 14+ uses 'output: export' in next.config.js
-    # For older versions, use 'next export'
-    
     local out_dir="${FRONTEND_DIR}/out"
     
-    # Remove existing out directory
-    rm -rf "$out_dir"
+    # With Next.js 14+ and 'output: export' in next.config.js,
+    # the 'out' directory is created automatically by 'npm run build'
+    # No need to run 'next export' separately
     
-    # Try static export
-    # Note: Next.js 14+ with App Router may not support static export for all pages
-    # In that case, we'll use the .next directory directly
-    
-    if npx next export -o "$out_dir" 2>/dev/null; then
-        log_success "Static export completed: $out_dir"
-    else
-        log_warning "Static export not available, using .next build output"
-        # For Next.js with server components, we'll upload the .next directory
-        # and rely on CloudFront + Lambda@Edge or use standalone mode
-        
-        # Create out directory with static assets
-        mkdir -p "$out_dir"
-        
-        # Copy static assets from .next/static
-        if [ -d "${FRONTEND_DIR}/.next/static" ]; then
-            mkdir -p "${out_dir}/_next/static"
-            cp -r "${FRONTEND_DIR}/.next/static/"* "${out_dir}/_next/static/"
-        fi
-        
-        # Copy public directory
-        if [ -d "${FRONTEND_DIR}/public" ]; then
-            cp -r "${FRONTEND_DIR}/public/"* "${out_dir}/" 2>/dev/null || true
-        fi
-        
-        # Create a basic index.html if not exists
-        if [ ! -f "${out_dir}/index.html" ]; then
-            log_warning "No index.html found, creating placeholder"
-            echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=/"></head></html>' > "${out_dir}/index.html"
-        fi
-        
-        log_success "Static assets prepared: $out_dir"
-    fi
-    
-    # Verify output directory
+    # Verify output directory exists
     if [ ! -d "$out_dir" ]; then
         log_error "Output directory not found: $out_dir"
+        log_error "Make sure next.config.js has 'output: \"export\"' configured"
+        exit 1
+    fi
+    
+    # Verify index.html exists and is not a placeholder
+    if [ ! -f "${out_dir}/index.html" ]; then
+        log_error "index.html not found in output directory"
+        exit 1
+    fi
+    
+    # Check if index.html is a placeholder (contains meta refresh to /)
+    if grep -q 'meta http-equiv="refresh"' "${out_dir}/index.html" 2>/dev/null; then
+        log_error "index.html appears to be a placeholder with redirect"
+        log_error "This usually means the build failed or next.config.js is misconfigured"
+        log_error "Make sure next.config.js has: output: 'export'"
         exit 1
     fi
     
     # Count files
     local file_count=$(find "$out_dir" -type f | wc -l | tr -d ' ')
     log_info "Total files to upload: $file_count"
+    
+    # List top-level contents
+    log_info "Output directory contents:"
+    ls -la "$out_dir" | head -15
+    
+    log_success "Static export verified: $out_dir"
 }
 
 # ============================================================================

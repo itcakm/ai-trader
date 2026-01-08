@@ -245,6 +245,12 @@ module "lambda" {
   log_retention_days             = var.log_retention_days
   enable_provisioned_concurrency = var.enable_provisioned_concurrency
 
+  # Cognito configuration for auth functions
+  cognito_user_pool_id = module.cognito.user_pool_id
+  cognito_client_id    = module.cognito.app_client_id
+  cognito_issuer       = module.cognito.issuer
+  cognito_jwks_uri     = module.cognito.jwks_uri
+
   # Auth functions will be deployed after backend packages are created
   # Run deploy-backend.sh first to create auth-*.zip packages in S3
   excluded_functions = []
@@ -254,7 +260,7 @@ module "lambda" {
     CostCenter = var.cost_center
   }
 
-  depends_on = [module.iam, module.secrets]
+  depends_on = [module.iam, module.secrets, module.cognito]
 }
 
 
@@ -297,6 +303,11 @@ module "route53" {
 #------------------------------------------------------------------------------
 module "acm" {
   source = "../../modules/acm"
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
 
   environment  = var.environment
   project_name = var.project_name
@@ -358,9 +369,10 @@ module "api_gateway" {
   enable_api_keys = true
 
   # Auth Lambda configuration
-  # Will be populated when auth Lambda is deployed
-  auth_lambda_invoke_arn    = var.auth_lambda_invoke_arn
-  auth_lambda_function_name = var.auth_lambda_function_name
+  # Pass the auth Lambda function ARN for API Gateway integration
+  enable_auth_routes        = true
+  auth_lambda_invoke_arn    = module.lambda.auth_function_invoke_arn != null ? module.lambda.auth_function_invoke_arn : ""
+  auth_lambda_function_name = module.lambda.auth_function_name != null ? module.lambda.auth_function_name : ""
 
   tags = {
     Owner      = var.owner
@@ -435,7 +447,7 @@ module "cloudfront" {
 
   # Domain and Certificate Configuration
   domain_name         = var.domain_name
-  acm_certificate_arn = module.acm.frontend_validated_certificate_arn
+  acm_certificate_arn = module.acm.cloudfront_validated_certificate_arn  # Must be in us-east-1
 
   # WAF Integration
   waf_web_acl_arn = module.waf.cloudfront_web_acl_arn
