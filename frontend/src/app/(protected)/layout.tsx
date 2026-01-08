@@ -3,6 +3,7 @@
 import { I18nProvider } from '@/providers/I18nProvider';
 import { ResponsiveProvider } from '@/providers/ResponsiveProvider';
 import { RBACProvider } from '@/providers/RBACProvider';
+import { OrganizationProvider } from '@/providers/OrganizationProvider';
 import { ContextualHelpProvider } from '@/providers/ContextualHelpProvider';
 import { CommandPaletteProvider } from '@/components/command-palette';
 import { ProtectedLayout } from '@/components/auth';
@@ -32,19 +33,21 @@ export default function ProtectedRouteLayout({
           showSessionExpiryWarning={true}
         >
           <RBACProvider>
-            <ContextualHelpProvider>
-              <CommandPaletteProvider>
-                <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
-                  <Sidebar />
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <Header />
-                    <main className="flex-1 overflow-auto p-6">
-                      {children}
-                    </main>
+            <OrganizationProvider>
+              <ContextualHelpProvider>
+                <CommandPaletteProvider>
+                  <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+                    <Sidebar />
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      <Header />
+                      <main className="flex-1 overflow-auto p-6">
+                        {children}
+                      </main>
+                    </div>
                   </div>
-                </div>
-              </CommandPaletteProvider>
-            </ContextualHelpProvider>
+                </CommandPaletteProvider>
+              </ContextualHelpProvider>
+            </OrganizationProvider>
           </RBACProvider>
         </ProtectedLayout>
       </ResponsiveProvider>
